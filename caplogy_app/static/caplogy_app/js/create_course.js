@@ -196,65 +196,232 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadFiles(path) {
-        fileList.innerHTML = '<li style="text-align: center; padding: 2rem; color: #6b7280;">🔄 Chargement...</li>';
+        console.log('DEBUG: loadFiles appelée avec path:', path);
         
-        fetch(`/nc_dir/?path=${encodeURIComponent(path)}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                fileList.innerHTML = '';
-                
-                // Ajouter le dossier parent si on n'est pas à la racine
-                if (path !== '/') {
-                    const parentPath = path.replace(/\/[^\/]*\/$/, '/');
-                    const parentItem = document.createElement('li');
-                    parentItem.innerHTML = '📁 .. (Dossier parent)';
-                    parentItem.dataset.type = 'folder';
-                    parentItem.dataset.path = parentPath;
-                    parentItem.style.fontWeight = 'bold';
-                    parentItem.style.color = '#3b82f6';
-                    fileList.appendChild(parentItem);
-                }
-
-                // Ajouter les dossiers
-                if (data.folders) {
-                    data.folders.forEach(folderName => {
-                        const listItem = document.createElement('li');
-                        listItem.innerHTML = `📁 ${folderName}`;
-                        listItem.dataset.type = 'folder';
-                        listItem.dataset.path = path + folderName + '/';
-                        listItem.style.fontWeight = '500';
-                        fileList.appendChild(listItem);
-                    });
-                }
-
-                // Ajouter les fichiers
-                if (data.files) {
-                    data.files.forEach(fileName => {
-                        const listItem = document.createElement('li');
-                        const fileIcon = getFileIcon(fileName);
-                        listItem.innerHTML = `${fileIcon} ${fileName}`;
-                        listItem.dataset.type = 'file';
-                        listItem.dataset.path = path + fileName;
-                        fileList.appendChild(listItem);
-                    });
-                }
-
-                if (fileList.children.length === 0) {
-                    fileList.innerHTML = '<li style="text-align: center; padding: 2rem; color: #6b7280;">📂 Dossier vide</li>';
-                }
-            })
-            .catch(error => {
-                fileList.innerHTML = `<li style="text-align: center; padding: 2rem; color: #ef4444;">❌ ${error.message}</li>`;
+        // Afficher un bouton de chargement stylisé
+        fileList.innerHTML = '<li class="loading-item no-hover" style="text-align: center; padding: 1.5rem; cursor: default !important; pointer-events: none;"><div style="background: #1f2937; color: #e5e7eb; padding: 0.75rem 1.5rem; border-radius: 0.5rem; display: inline-block; font-weight: 500;">🔄 Chargement en cours...</div></li>';
+        
+        // Modifier le style du bouton de chargement pour le mode clair
+        const isDarkMode = document.documentElement.classList.contains('dark') || 
+                          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        // Couleurs adaptatives
+        const colors = isDarkMode ? {
+            loadingBg: '#1f2937',
+            loadingText: '#e5e7eb',
+            textPrimary: '#e5e7eb',
+            textSecondary: '#9ca3af',
+            hoverBg: '#374151',
+            hoverBgFile: '#065f46',
+            hoverTextFile: '#10b981',
+            errorText: '#f87171'
+        } : {
+            loadingBg: '#3b82f6',
+            loadingText: '#ffffff',
+            textPrimary: '#374151',
+            textSecondary: '#6b7280',
+            hoverBg: '#f3f4f6',
+            hoverBgFile: '#ecfdf5',
+            hoverTextFile: '#059669',
+            errorText: '#ef4444'
+        };
+        
+        // Maintenant afficher le chemin une fois les données chargées
+        if (currentPathDiv) {
+            // Appliquer directement les styles dark mode au conteneur
+            if (isDarkMode) {
+                currentPathDiv.style.color = '#e5e7eb';
+                currentPathDiv.style.backgroundColor = '#374151';
+                currentPathDiv.style.borderColor = '#4b5563';
+            } else {
+                // Appliquer directement les styles pour le mode clair
+                currentPathDiv.style.color = '#374151';
+                currentPathDiv.style.backgroundColor = '#ffffff';
+                currentPathDiv.style.borderColor = '#e5e7eb';
+            }
+            
+            // Construire la navigation par chemin
+            currentPathDiv.innerHTML = ''; // Vider le contenu
+            
+            // Ajouter l'icône et la racine
+            const rootSpan = document.createElement('span');
+            rootSpan.innerHTML = '📁 ';
+            rootSpan.style.color = colors.textPrimary;
+            currentPathDiv.appendChild(rootSpan);
+            
+            // Racine cliquable
+            const rootLink = document.createElement('span');
+            rootLink.textContent = 'Biblio_Cours_Caplogy';
+            rootLink.style.cursor = 'pointer';
+            rootLink.style.color = colors.textPrimary + ' !important';
+            rootLink.style.fontWeight = '600';
+            rootLink.onclick = () => loadFiles('/');
+            
+            // Ajouter un effet hover programmatique
+            rootLink.addEventListener('mouseenter', () => {
+                rootLink.style.backgroundColor = isDarkMode ? '#4b5563' : '#e5e7eb';
+                rootLink.style.padding = '0.125rem 0.25rem';
+                rootLink.style.borderRadius = '0.25rem';
             });
+            rootLink.addEventListener('mouseleave', () => {
+                rootLink.style.backgroundColor = '';
+                rootLink.style.padding = '';
+                rootLink.style.borderRadius = '';
+            });
+            
+            currentPathDiv.appendChild(rootLink);
+            
+            // Ajouter les sous-dossiers si on n'est pas à la racine
+            let cleanPath = path.replace(/^\/+|\/+$/g, '');
+            if (cleanPath && cleanPath !== '') {
+                const pathParts = cleanPath.split('/').filter(part => part !== '');
+                let currentNavPath = '';
+                
+                pathParts.forEach((part, index) => {
+                    // Ajouter le séparateur
+                    const separator = document.createElement('span');
+                    separator.textContent = ' / ';
+                    separator.style.color = colors.textSecondary;
+                    currentPathDiv.appendChild(separator);
+                    
+                    // Construire le chemin pour ce niveau
+                    currentNavPath += '/' + part;
+                    
+                    // Créer le lien cliquable
+                    const partLink = document.createElement('span');
+                    partLink.textContent = part;
+                    partLink.style.cursor = 'pointer';
+                    partLink.style.color = colors.textPrimary;
+                    partLink.style.fontWeight = '500';
+                    
+                    // Si c'est le dernier élément (dossier courant), le rendre non cliquable
+                    if (index === pathParts.length - 1) {
+                        partLink.style.cursor = 'default';
+                        partLink.style.fontWeight = '600';
+                    } else {
+                        // Ajouter un effet hover programmatique
+                        partLink.addEventListener('mouseenter', () => {
+                            partLink.style.backgroundColor = isDarkMode ? '#4b5563' : '#e5e7eb';
+                            partLink.style.padding = '0.125rem 0.25rem';
+                            partLink.style.borderRadius = '0.25rem';
+                        });
+                        partLink.addEventListener('mouseleave', () => {
+                            partLink.style.backgroundColor = '';
+                            partLink.style.padding = '';
+                            partLink.style.borderRadius = '';
+                        });
+                        
+                        // Capturer la valeur dans une closure
+                        const navPath = currentNavPath + '/';
+                        partLink.onclick = () => loadFiles(navPath);
+                    }
+                    
+                    currentPathDiv.appendChild(partLink);
+                });
+            }
+            
+            // Réafficher le chemin
+            currentPathDiv.style.display = 'block';
+            console.log('DEBUG: navigation par chemin mise à jour');
+        }
+        fileList.innerHTML = '';
+        
+        // Ajouter le dossier parent si on n'est pas à la racine
+        if (path !== '/') {
+            const parentPath = path.replace(/\/[^\/]*\/$/, '/');
+            const parentItem = document.createElement('li');
+            parentItem.innerHTML = '📁 ⬆️ .. (Dossier parent)';
+            parentItem.dataset.type = 'folder';
+            parentItem.dataset.path = parentPath;
+            parentItem.style.fontWeight = 'bold';
+            parentItem.style.color = isDarkMode ? '#60a5fa' : '#3b82f6';
+            parentItem.style.cursor = 'pointer';
+            parentItem.style.padding = '0.5rem';
+            parentItem.style.borderRadius = '0.375rem';
+            parentItem.style.transition = 'background-color 0.2s';
+            parentItem.style.borderBottom = `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`;
+            parentItem.style.marginBottom = '0.5rem';
+            
+            // Effet hover pour le dossier parent
+            parentItem.addEventListener('mouseenter', () => {
+                parentItem.style.backgroundColor = isDarkMode ? '#1e3a8a' : '#eff6ff';
+            });
+            parentItem.addEventListener('mouseleave', () => {
+                parentItem.style.backgroundColor = '';
+            });
+            
+            fileList.appendChild(parentItem);
+        }
+
+        // Ajouter les dossiers
+        if (data.folders) {
+            data.folders.forEach(folderName => {
+                // Filtrer le dossier racine Biblio_Cours_Caplogy quand on est à la racine
+                if ((path === '/' || path === '') && folderName === 'Biblio_Cours_Caplogy') {
+                    // Ne pas afficher ce dossier comme bouton cliquable
+                    return;
+                }
+                
+                // Éviter d'afficher le dossier courant comme un sous-dossier
+                const currentFolderName = path.split('/').filter(p => p).pop();
+                if (folderName === currentFolderName) {
+                    return;
+                }
+                
+                const listItem = document.createElement('li');
+                listItem.innerHTML = `📁 ${folderName}`;
+                listItem.dataset.type = 'folder';
+                listItem.dataset.path = path + folderName + '/';
+                listItem.style.fontWeight = '500';
+                listItem.style.cursor = 'pointer';
+                listItem.style.padding = '0.5rem';
+                listItem.style.borderRadius = '0.375rem';
+                listItem.style.transition = 'background-color 0.2s';
+                listItem.style.color = colors.textPrimary;
+                
+                // Effet hover
+                listItem.addEventListener('mouseenter', () => {
+                    listItem.style.backgroundColor = colors.hoverBg;
+                });
+                listItem.addEventListener('mouseleave', () => {
+                    listItem.style.backgroundColor = '';
+                });
+                
+                fileList.appendChild(listItem);
+            });
+        }
+
+        // Ajouter les fichiers
+        if (data.files) {
+            data.files.forEach(fileName => {
+                const listItem = document.createElement('li');
+                const fileIcon = getFileIcon(fileName);
+                listItem.innerHTML = `${fileIcon} ${fileName}`;
+                listItem.dataset.type = 'file';
+                listItem.dataset.path = path + fileName;
+                listItem.style.cursor = 'pointer';
+                listItem.style.padding = '0.5rem';
+                listItem.style.borderRadius = '0.375rem';
+                listItem.style.transition = 'background-color 0.2s';
+                listItem.style.color = colors.textPrimary;
+                
+                // Effet hover pour les fichiers
+                listItem.addEventListener('mouseenter', () => {
+                    listItem.style.backgroundColor = colors.hoverBgFile;
+                    listItem.style.color = colors.hoverTextFile;
+                });
+                listItem.addEventListener('mouseleave', () => {
+                    listItem.style.backgroundColor = '';
+                    listItem.style.color = colors.textPrimary;
+                });
+                
+                fileList.appendChild(listItem);
+            });
+        }
+
+        if (fileList.children.length === 0) {
+            fileList.innerHTML = `<li style="text-align: center; padding: 2rem; color: ${colors.textSecondary};">📂 Dossier vide</li>`;
+        }
     }
 
     function getFileIcon(fileName) {

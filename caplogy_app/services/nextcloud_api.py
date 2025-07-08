@@ -11,6 +11,13 @@ class NextcloudAPI:
         self.auth = (user, password)
 
     def list_nc_dir(self, path):
+        # S'assurer que le chemin commence par /Shared/Biblio_Cours_Caplogy
+        biblio_path = '/Shared/Biblio_Cours_Caplogy'
+        if not path.startswith(biblio_path):
+            if path.startswith('/'):
+                path = biblio_path + path
+            else:
+                path = biblio_path + '/' + path
         try:
             url = self.webdav + path
             print(f"[NextcloudAPI] URL construite: {url}")
@@ -29,7 +36,7 @@ class NextcloudAPI:
             print(f"[NextcloudAPI] Parsing XML response...")
             tree = ET.fromstring(resp.content)
             ns = {'d': 'DAV:'}
-            current = path.rstrip('/') + '/'
+            current = path.rstrip('/')
             folders, files = [], []
             
             print(f"[NextcloudAPI] Traitement des éléments XML...")
