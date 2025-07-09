@@ -437,6 +437,7 @@ class MoodleAPI:
             return None
 
     def add_url(self, course_id, sectionnum, name, url, description=''):
+        """Ajoute une URL comme ressource dans un cours Moodle en utilisant notre plugin personnalisé"""
         params = {
             'courseid': course_id,
             'sectionnum': sectionnum,

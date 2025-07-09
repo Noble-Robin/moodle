@@ -79,3 +79,19 @@ class NextcloudAPI:
         resp.raise_for_status()
         tree = ET.fromstring(resp.text)
         return tree.find('.//url').text
+    
+    def get_share_url(self, file_path):
+        """Génère une URL de partage Nextcloud pour un fichier donné"""
+        try:
+            # S'assurer que le chemin commence par /Shared/Biblio_Cours_Caplogy
+            biblio_path = '/Shared/Biblio_Cours_Caplogy'
+            if not file_path.startswith(biblio_path):
+                if file_path.startswith('/'):
+                    file_path = biblio_path + file_path
+                else:
+                    file_path = biblio_path + '/' + file_path
+            
+            return self.share_file_nextcloud(file_path)
+        except Exception as e:
+            print(f"Erreur lors de la génération de l'URL de partage pour {file_path}: {e}")
+            return None

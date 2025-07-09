@@ -534,9 +534,60 @@ def create_course(request, course_id=None):
                 # Récupérer et traiter les sections pour l'édition
                 sections = [v for k,v in request.POST.items() if k.startswith('section_')]
                 
+                # Récupérer les fichiers/URLs associés aux sections
+                files_data = {}
+                for key, value in request.POST.items():
+                    if key.startswith('file_') and value.strip():
+                        section_num = key.replace('file_', '')
+                        files_data[section_num] = value.strip()
+                
+                # Debug logging
+                print(f"DEBUG - POST data: {dict(request.POST)}")
+                print(f"DEBUG - Sections found: {sections}")
+                print(f"DEBUG - Files data: {files_data}")
+                
                 if sections:
                     # Utiliser la méthode update_sections pour les opérations sur les sections
-                    api.update_sections(course_id, sections)
+                    section_nums = api.update_sections(course_id, sections)
+                    print(f"DEBUG - Section nums created: {section_nums}")
+                    
+                    # Ajouter les URLs aux sections créées
+                    if files_data and section_nums:
+                        print(f"DEBUG - Processing URLs for sections")
+                        for i, section_num in enumerate(section_nums):
+                            file_key = str(i + 1)  # Les clés de fichiers sont basées sur l'ordre dans l'interface
+                            print(f"DEBUG - Looking for file_key: {file_key} in files_data: {files_data}")
+                            if file_key in files_data:
+                                file_path = files_data[file_key]
+                                section_title = sections[i] if i < len(sections) else f"Section {i+1}"
+                                print(f"DEBUG - Processing file: {file_path} for section {section_num} (title: {section_title})")
+                                # Déterminer si c'est un fichier Nextcloud ou une URL externe
+                                if file_path.startswith('http'):
+                                    # C'est une URL externe
+                                    try:
+                                        print(f"DEBUG - Adding URL: {file_path}")
+                                        result = api.add_url(course_id, section_num, f"Lien - {section_title}", file_path, f"Ressource pour {section_title}")
+                                        print(f"DEBUG - URL add result: {result}")
+                                    except Exception as url_error:
+                                        print(f"Erreur lors de l'ajout de l'URL {file_path}: {url_error}")
+                                else:
+                                    # C'est un fichier Nextcloud - générer l'URL de partage
+                                    try:
+                                        print(f"DEBUG - Processing Nextcloud file: {file_path}")
+                                        # Générer l'URL de partage Nextcloud
+                                        nextcloud_api = NextcloudAPI(
+                                            base_url=os.getenv('NEXTCLOUD_WEBDAV_URL'),
+                                            share_url=os.getenv('NEXTCLOUD_SHARE_URL'),
+                                            user=os.getenv('NEXTCLOUD_USER'),
+                                            password=os.getenv('NEXTCLOUD_PASSWORD')
+                                        )
+                                        share_url = nextcloud_api.get_share_url(file_path)
+                                        if share_url:
+                                            print(f"DEBUG - Adding Nextcloud URL: {share_url}")
+                                            result = api.add_url(course_id, section_num, f"Fichier - {section_title}", share_url, f"Fichier Nextcloud pour {section_title}")
+                                            print(f"DEBUG - Nextcloud URL add result: {result}")
+                                    except Exception as nc_error:
+                                        print(f"Erreur lors de la création du lien Nextcloud pour {file_path}: {nc_error}")
                 
                 messages.success(request, f"Cours '{title}' modifié avec succès")
             else:
@@ -544,7 +595,63 @@ def create_course(request, course_id=None):
                 course_id = api.create_course(title, cat_id)
                 if course_id:
                     sections = [v for k,v in request.POST.items() if k.startswith('section_')]
-                    api.create_sections(course_id, sections)
+                    
+                    # Récupérer les fichiers/URLs associés aux sections
+                    files_data = {}
+                    for key, value in request.POST.items():
+                        if key.startswith('file_') and value.strip():
+                            section_num = key.replace('file_', '')
+                            files_data[section_num] = value.strip()
+                    
+                    # Debug logging
+                    print(f"DEBUG - POST data: {dict(request.POST)}")
+                    print(f"DEBUG - Sections found: {sections}")
+                    print(f"DEBUG - Files data: {files_data}")
+                    
+                    # Créer les sections
+                    section_nums = api.create_sections(course_id, sections)
+                    print(f"DEBUG - Section nums created: {section_nums}")
+                    
+                    # Ajouter les URLs aux sections créées
+                    if files_data and section_nums:
+                        print(f"DEBUG - Processing URLs for sections")
+                        # Itérer sur les sections dans l'ordre de création (interface utilisateur)
+                        for i, section_num in enumerate(section_nums):
+                            # Les clés de fichiers correspondent à l'ordre dans l'interface (1-based)
+                            file_key = str(i + 1)
+                            print(f"DEBUG - Section {i+1} (Moodle section {section_num}): looking for file_key: {file_key} in files_data: {files_data}")
+                            if file_key in files_data:
+                                file_path = files_data[file_key]
+                                section_title = sections[i] if i < len(sections) else f"Section {i+1}"
+                                print(f"DEBUG - Processing file: {file_path} for section {section_num} (title: {section_title})")
+                                # Déterminer si c'est un fichier Nextcloud ou une URL externe
+                                if file_path.startswith('http'):
+                                    # C'est une URL externe
+                                    try:
+                                        print(f"DEBUG - Adding URL: {file_path}")
+                                        result = api.add_url(course_id, section_num, f"Lien - {section_title}", file_path, f"Ressource pour {section_title}")
+                                        print(f"DEBUG - URL add result: {result}")
+                                    except Exception as url_error:
+                                        print(f"Erreur lors de l'ajout de l'URL {file_path}: {url_error}")
+                                else:
+                                    # C'est un fichier Nextcloud - générer l'URL de partage
+                                    try:
+                                        print(f"DEBUG - Processing Nextcloud file: {file_path}")
+                                        # Générer l'URL de partage Nextcloud
+                                        nextcloud_api = NextcloudAPI(
+                                            base_url=os.getenv('NEXTCLOUD_WEBDAV_URL'),
+                                            share_url=os.getenv('NEXTCLOUD_SHARE_URL'),
+                                            user=os.getenv('NEXTCLOUD_USER'),
+                                            password=os.getenv('NEXTCLOUD_PASSWORD')
+                                        )
+                                        share_url = nextcloud_api.get_share_url(file_path)
+                                        if share_url:
+                                            print(f"DEBUG - Adding Nextcloud URL: {share_url}")
+                                            result = api.add_url(course_id, section_num, f"Fichier - {section_title}", share_url, f"Fichier Nextcloud pour {section_title}")
+                                            print(f"DEBUG - Nextcloud URL add result: {result}")
+                                    except Exception as nc_error:
+                                        print(f"Erreur lors de la création du lien Nextcloud pour {file_path}: {nc_error}")
+                    
                     messages.success(request, f"Cours '{title}' créé avec succès")
                 else:
                     messages.error(request, "Erreur lors de la création du cours")

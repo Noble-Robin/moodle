@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 DEBUG: create_course.js chargé et DOMContentLoaded déclenché');
+    
     // Gestion des catégories en cascade
     const categorySelects = [
         document.getElementById('cat-level-0'),
@@ -146,10 +148,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fonction globale pour ajouter une ressource
     window.addResource = function(btn, sectionId) {
+        console.log('🔍 DEBUG: addResource appelée avec sectionId:', sectionId);
+        console.log('🔍 DEBUG: btn:', btn);
+        console.log('🔍 DEBUG: modal element:', modal);
+        
         currentSectionId = sectionId;
         currentResourceBtn = btn;
         openFileModal('/');
     };
+    
+    console.log('🚀 DEBUG: Fonction addResource définie sur window:', typeof window.addResource);
 
     function updateSectionNumbers() {
         const sections = sectionsList.querySelectorAll('.section-item');
@@ -174,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('nc-modal');
     const modalClose = document.getElementById('nc-close');
     const fileList = document.getElementById('nc-list');
+    const currentPathDiv = document.getElementById('nc-current-path');
     let currentSectionId = null;
     let currentResourceBtn = null;
 
@@ -185,7 +194,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function openFileModal(path) {
+        console.log('🔍 DEBUG: openFileModal appelée avec path:', path);
+        console.log('🔍 DEBUG: modal element avant add class:', modal);
+        
         modal.classList.add('active');
+        console.log('🔍 DEBUG: modal.classList après add active:', modal.classList.toString());
+        
         loadFiles(path);
     }
 
@@ -225,7 +239,65 @@ document.addEventListener('DOMContentLoaded', () => {
             hoverTextFile: '#059669',
             errorText: '#ef4444'
         };
-        
+
+        // Créer un timeout personnalisé pour le fetch (60 secondes)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+        }, 60000); // 60 secondes
+
+        // Faire l'appel AJAX pour récupérer les fichiers Nextcloud
+        fetch(`/nc_dir/?path=${encodeURIComponent(path)}`, {
+            signal: controller.signal,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            clearTimeout(timeoutId);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            processFileData(data, path, colors, isDarkMode);
+        })
+        .catch(error => {
+            clearTimeout(timeoutId);
+            console.error('Erreur lors du chargement des fichiers:', error);
+            
+            let errorMessage = '❌ Erreur de chargement';
+            if (error.name === 'AbortError') {
+                errorMessage = '⏰ Timeout: Nextcloud met trop de temps à répondre (>30s)';
+            } else if (error.message.includes('HTTP')) {
+                errorMessage = `❌ Erreur serveur: ${error.message}`;
+            } else if (error.message.includes('Failed to fetch')) {
+                errorMessage = '🌐 Erreur de connexion réseau';
+            }
+            
+            fileList.innerHTML = `<li style="text-align: center; padding: 2rem; color: ${colors.errorText}; background-color: ${isDarkMode ? '#7f1d1d' : '#fef2f2'}; border-radius: 0.5rem; margin: 1rem;">${errorMessage}<br><small style="opacity: 0.8;">Réessayez en rafraîchissant la page ou contactez l'administrateur</small></li>`;
+        });
+    }
+
+    // Fonction pour mettre à jour le message de chargement avec progression
+    function updateLoadingMessage(message, progress = null) {
+        const loadingElement = fileList.querySelector('.loading-item');
+        if (loadingElement) {
+            let progressBar = '';
+            if (progress !== null) {
+                progressBar = `<div style="width: 100%; background-color: #374151; border-radius: 4px; overflow: hidden; margin-top: 0.5rem;">
+                    <div style="width: ${progress}%; height: 6px; background: linear-gradient(90deg, #3b82f6, #10b981); transition: width 0.3s ease;"></div>
+                </div>`;
+            }
+            
+            loadingElement.innerHTML = `<div style="background: #1f2937; color: #e5e7eb; padding: 0.75rem 1.5rem; border-radius: 0.5rem; display: inline-block; font-weight: 500;">
+                🔄 ${message}${progressBar}
+            </div>`;
+        }
+    }
+
+    function processFileData(data, path, colors, isDarkMode) {
         // Maintenant afficher le chemin une fois les données chargées
         if (currentPathDiv) {
             // Appliquer directement les styles dark mode au conteneur
