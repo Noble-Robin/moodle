@@ -59,6 +59,9 @@
             <div class="course-meta">
               <div class="course-info">
                 <span class="course-id">ID: {{ course.id }}</span>
+                {% if course.source_category_name %}
+                  <span class="course-category">Catégorie: {{ course.source_category_name }}</span>
+                {% endif %}
                 {% if course.startdate %}
                   <span class="course-date">Créé le: {{ course.startdate|date:"d/m/Y" }}</span>
                 {% endif %}

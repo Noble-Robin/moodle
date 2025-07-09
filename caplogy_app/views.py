@@ -48,16 +48,60 @@ def category_view(request):
             url=os.getenv('MOODLE_URL'),
             token=os.getenv('MOODLE_TOKEN')
         )
-        categories = api.get_categories()
+        categories = api.get_all_categories()
+        
+        # Créer un dictionnaire pour faire le mapping parent-enfant plus facilement
+        categories_dict = {cat['id']: cat for cat in categories}
+        
+        # Fonction récursive pour compter les cours dans une catégorie et ses sous-catégories
+        def count_total_courses(category_id, visited=None):
+            if visited is None:
+                visited = set()
+            
+            # Éviter les cycles infinis
+            if category_id in visited:
+                return 0
+            visited.add(category_id)
+            
+            category = categories_dict.get(category_id)
+            if not category:
+                return 0
+            
+            # Commencer par les cours de cette catégorie
+            total_courses = category.get('coursecount', 0)
+            
+            # Ajouter les cours de toutes les sous-catégories
+            for cat in categories:
+                if cat.get('parent') == category_id:
+                    total_courses += count_total_courses(cat['id'], visited.copy())
+            
+            return total_courses
         
         # Enrichir les données de l'API avec nos champs personnalisés
         for category in categories:
-            # Ajouter le champ has_courses basé sur coursecount
-            category['has_courses'] = category.get('coursecount', 0) > 0
+            # Calculer le total des cours (catégorie + sous-catégories)
+            total_courses = count_total_courses(category['id'])
             
-            # Pour l'instant, on assume que toutes les catégories ont des sous-catégories
-            # (on affinera plus tard selon les vraies données)
-            category['has_subcategories'] = True
+            # Mettre à jour le coursecount avec le total récursif
+            category['coursecount'] = total_courses
+            
+            # Ajouter le champ has_courses basé sur le total (au lieu de coursecount direct)
+            category['has_courses'] = total_courses > 0
+            
+            # Vérifier s'il y a vraiment des sous-catégories
+            has_subcategories = any(cat.get('parent') == category['id'] for cat in categories)
+            category['has_subcategories'] = has_subcategories
+        
+        # Filtrer pour ne retourner que les catégories de niveau racine
+        root_categories = [cat for cat in categories if cat.get('parent', 0) == 0]
+        
+        # Appliquer le filtre de cours si spécifié
+        course_filter = request.GET.get('filter_courses')
+        if course_filter == 'with_courses':
+            root_categories = [cat for cat in root_categories if cat.get('has_courses', False)]
+        elif course_filter == 'without_courses':
+            root_categories = [cat for cat in root_categories if not cat.get('has_courses', False)]
+        # Si course_filter est 'all' ou None, on garde toutes les catégories
                 
     except Exception as e:
         # En cas d'erreur de connexion, utiliser des données de test
@@ -105,7 +149,10 @@ def category_view(request):
         ]
         messages.warning(request, "Connexion à Moodle indisponible. Affichage des données de test.")
     
-    return render(request, 'caplogy_app/category.html', {'categories': categories})
+    return render(request, 'caplogy_app/category.html', {
+        'categories': root_categories,
+        'current_filter': request.GET.get('filter_courses', 'all')
+    })
 
 # @login_required
 def subcategory_view(request, category_id):
@@ -115,19 +162,51 @@ def subcategory_view(request, category_id):
             token=os.getenv('MOODLE_TOKEN')
         )
         
-        # Utiliser la même logique que votre script addCustomCat.py
+        # Récupérer toutes les catégories pour avoir une vue complète de la hiérarchie
+        all_categories = api.get_all_categories()
+        categories_dict = {cat['id']: cat for cat in all_categories}
+        
+        # Fonction récursive pour compter les cours dans une catégorie et ses sous-catégories
+        def count_total_courses(category_id, visited=None):
+            if visited is None:
+                visited = set()
+            
+            # Éviter les cycles infinis
+            if category_id in visited:
+                return 0
+            visited.add(category_id)
+            
+            category = categories_dict.get(category_id)
+            if not category:
+                return 0
+            
+            # Commencer par les cours de cette catégorie
+            total_courses = category.get('coursecount', 0)
+            
+            # Ajouter les cours de toutes les sous-catégories
+            for cat in all_categories:
+                if cat.get('parent') == category_id:
+                    total_courses += count_total_courses(cat['id'], visited.copy())
+            
+            return total_courses
+        
+        # Récupérer les sous-catégories directes
         subcategories = api.get_subcategories(category_id)
         
-        # Pour chaque sous-catégorie, vérifier s'elle a elle-même des sous-catégories
+        # Enrichir chaque sous-catégorie avec le comptage récursif
         for subcategory in subcategories:
-            subcategory['has_courses'] = subcategory.get('coursecount', 0) > 0
+            # Calculer le total des cours (sous-catégorie + ses sous-sous-catégories)
+            total_courses = count_total_courses(subcategory['id'])
             
-            # Vérifier s'il y a des sous-catégories en appelant l'API
-            try:
-                sub_subcategories = api.get_subcategories(subcategory['id'])
-                subcategory['has_subcategories'] = len(sub_subcategories) > 0
-            except:
-                subcategory['has_subcategories'] = False
+            # Mettre à jour le coursecount avec le total récursif
+            subcategory['coursecount'] = total_courses
+            
+            # Ajouter le champ has_courses basé sur le total
+            subcategory['has_courses'] = total_courses > 0
+            
+            # Vérifier s'il y a vraiment des sous-sous-catégories
+            has_subcategories = any(cat.get('parent') == subcategory['id'] for cat in all_categories)
+            subcategory['has_subcategories'] = has_subcategories
         
         # Récupérer le nom de la catégorie parent et construire le chemin
         parent_name = "Catégorie"
@@ -135,46 +214,24 @@ def subcategory_view(request, category_id):
         
         # Fonction pour trouver une catégorie par ID dans toutes les catégories
         def find_category_by_id(cat_id):
-            # Chercher d'abord dans les catégories principales
-            main_categories = api.get_categories()
-            for cat in main_categories:
-                if cat.get('id') == cat_id:
-                    return cat
-            
-            # Chercher ensuite dans toutes les sous-catégories de niveau 1
-            for main_cat in main_categories:
-                try:
-                    sub_cats = api.get_subcategories(main_cat['id'])
-                    for sub_cat in sub_cats:
-                        if sub_cat.get('id') == cat_id:
-                            return sub_cat
-                        
-                        # Chercher dans les sous-sous-catégories
-                        try:
-                            sub_sub_cats = api.get_subcategories(sub_cat['id'])
-                            for sub_sub_cat in sub_sub_cats:
-                                if sub_sub_cat.get('id') == cat_id:
-                                    return sub_sub_cat
-                        except:
-                            continue
-                except:
-                    continue
-            return None
+            return categories_dict.get(cat_id)
         
         # Trouver la catégorie parent
         parent_category = find_category_by_id(int(category_id))
         if parent_category:
             parent_name = parent_category.get('name', 'Catégorie')
             
-            # Construire le chemin de navigation (breadcrumb)
-            breadcrumb_path = [{'name': parent_name, 'id': category_id}]
+            # Construire le chemin de navigation (breadcrumb) en remontant la hiérarchie
+            def build_breadcrumb(cat_id, path=[]):
+                category = find_category_by_id(cat_id)
+                if category:
+                    path.insert(0, {'name': category.get('name', 'Catégorie'), 'id': cat_id})
+                    parent_id = category.get('parent')
+                    if parent_id and parent_id != 0:
+                        build_breadcrumb(parent_id, path)
+                return path
             
-            # Si la catégorie a un parent, l'ajouter au chemin
-            parent_id = parent_category.get('parent')
-            if parent_id and parent_id != 0:
-                grand_parent = find_category_by_id(parent_id)
-                if grand_parent:
-                    breadcrumb_path.insert(0, {'name': grand_parent.get('name', 'Catégorie'), 'id': parent_id})
+            breadcrumb_path = build_breadcrumb(int(category_id))
                 
     except Exception as e:
         # En cas d'erreur de connexion à l'API Moodle
@@ -192,15 +249,58 @@ def subcategory_view(request, category_id):
 
 # @login_required
 def category_courses_view(request, category_id):
-    """Vue pour afficher les cours d'une catégorie spécifique"""
+    """Vue pour afficher les cours d'une catégorie spécifique et de ses sous-catégories"""
     try:
         api = MoodleAPI(
             url=os.getenv('MOODLE_URL'),
             token=os.getenv('MOODLE_TOKEN')
         )
         
-        # Récupérer les cours de la catégorie
-        courses = api.get_courses_by_category(int(category_id))
+        # Récupérer toutes les catégories pour identifier les sous-catégories
+        all_categories = api.get_all_categories()
+        categories_dict = {cat['id']: cat for cat in all_categories}
+        
+        # Fonction récursive pour collecter tous les IDs de catégories (catégorie + sous-catégories)
+        def get_all_category_ids(category_id, visited=None):
+            if visited is None:
+                visited = set()
+            
+            # Éviter les cycles infinis
+            if category_id in visited:
+                return []
+            visited.add(category_id)
+            
+            category_ids = [category_id]
+            
+            # Ajouter toutes les sous-catégories
+            for cat in all_categories:
+                if cat.get('parent') == category_id:
+                    category_ids.extend(get_all_category_ids(cat['id'], visited.copy()))
+            
+            return category_ids
+        
+        # Obtenir tous les IDs de catégories (principale + sous-catégories)
+        target_category_ids = get_all_category_ids(int(category_id))
+        
+        # Récupérer les cours de toutes ces catégories
+        all_courses = []
+        for cat_id in target_category_ids:
+            try:
+                category_courses = api.get_courses_by_category(cat_id)
+                if category_courses:
+                    # Ajouter l'information de la catégorie source à chaque cours
+                    for course in category_courses:
+                        course['source_category_id'] = cat_id
+                        if cat_id in categories_dict:
+                            course['source_category_name'] = categories_dict[cat_id].get('name', f'Catégorie {cat_id}')
+                        else:
+                            course['source_category_name'] = f'Catégorie {cat_id}'
+                    all_courses.extend(category_courses)
+            except Exception as course_error:
+                print(f"Erreur lors de la récupération des cours de la catégorie {cat_id}: {course_error}")
+                continue
+        
+        courses = all_courses
         
         # Récupérer les informations de la catégorie et construire le breadcrumb
         breadcrumb_path = []

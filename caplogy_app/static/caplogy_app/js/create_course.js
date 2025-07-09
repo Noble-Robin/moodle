@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('DEBUG: loadFiles appelée avec path:', path);
         
         // Afficher un bouton de chargement stylisé
-        fileList.innerHTML = '<li class="loading-item no-hover" style="text-align: center; padding: 1.5rem; cursor: default !important; pointer-events: none;"><div style="background: #1f2937; color: #e5e7eb; padding: 0.75rem 1.5rem; border-radius: 0.5rem; display: inline-block; font-weight: 500;">🔄 Chargement en cours...</div></li>';
+        fileList.innerHTML = '<li class="loading-item no-hover" style="text-align: center; padding: 1.5rem; cursor: default !important; pointer-events: none;"><div style="color: #e5e7eb; padding: 0.75rem 1.5rem; border-radius: 0.5rem; display: inline-block; font-weight: 500;">🔄 Chargement en cours...</div></li>';
         
         // Modifier le style du bouton de chargement pour le mode clair
         const isDarkMode = document.documentElement.classList.contains('dark') || 

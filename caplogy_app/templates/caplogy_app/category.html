@@ -2,6 +2,11 @@
 {% load static %}
 {% block title %}Catégories{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'caplogy_app/css/category_filters.css' %}">
+<link rel="stylesheet" href="{% static 'caplogy_app/css/add_category_btn.css' %}">
+{% endblock %}
+
 {% block content %}
   <div class="page-container">
     <h1 class="page-title">Catégories Moodle</h1>
@@ -13,6 +18,23 @@
       </div>
     </div>
     
+    <!-- Filtres -->
+    <div class="filter-container">
+      <div class="filter-section">
+        <label for="course-filter" class="filter-label">Filtrer par cours :</label>
+        <select id="course-filter" class="filter-select">
+          <option value="all" {% if current_filter == 'all' %}selected{% endif %}>Toutes les catégories</option>
+          <option value="with_courses" {% if current_filter == 'with_courses' %}selected{% endif %}>Avec cours</option>
+          <option value="without_courses" {% if current_filter == 'without_courses' %}selected{% endif %}>Sans cours</option>
+        </select>
+      </div>
+      {% if current_filter != 'all' %}
+        <div class="filter-reset">
+          <a href="{% url 'categories' %}" class="reset-filter-btn">Réinitialiser les filtres</a>
+        </div>
+      {% endif %}
+    </div>
+    
     {% if categories %}
       <div class="categories-grid">
         {% for category in categories %}
@@ -20,7 +42,7 @@
             <h3 class="category-name">{{ category.name }}</h3>
             <p class="category-description">{{ category.description|default:"Aucune description disponible" }}</p>
             <div class="category-meta">
-              {% if category.coursecount %}
+              {% if category.coursecount > 0 %}
                 <span class="course-count">{{ category.coursecount }} cours</span>
               {% else %}
                 <span class="course-count no-courses">Aucun cours</span>
@@ -92,6 +114,20 @@
       }
 
       searchInput.addEventListener('input', filterCategories);
+      
+      // Gestion du filtre de cours
+      const courseFilter = document.getElementById('course-filter');
+      if (courseFilter) {
+        courseFilter.addEventListener('change', function() {
+          const currentUrl = new URL(window.location.href);
+          if (this.value === 'all') {
+            currentUrl.searchParams.delete('filter_courses');
+          } else {
+            currentUrl.searchParams.set('filter_courses', this.value);
+          }
+          window.location.href = currentUrl.toString();
+        });
+      }
     });
 
     function openAddCategoryModal(parentId) {
@@ -142,40 +178,4 @@
       }
     }
   </script>
-{% endblock %}
-
-{% block extra_css %}
-{{ block.super }}
-<link rel="stylesheet" href="{% static 'caplogy_app/css/add_category_btn.css' %}">
-<style>
-  .add-category-fab {
-    position: fixed;
-    right: 2.5rem;
-    bottom: 2.5rem;
-    z-index: 1000;
-    background: var(--color-accent);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 64px;
-    height: 64px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 24px color-mix(in srgb, var(--color-accent) 40%, transparent);
-    font-size: 2.5rem;
-    cursor: pointer;
-    transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
-  }
-  .add-category-fab:hover {
-    background: color-mix(in srgb, var(--color-accent) 90%, black);
-    transform: scale(1.08);
-  }
-  .add-category-fab svg {
-    width: 2.2rem;
-    height: 2.2rem;
-    fill: white;
-    pointer-events: none;
-  }
-</style>
 {% endblock %}
