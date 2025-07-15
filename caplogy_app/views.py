@@ -33,7 +33,7 @@ def login_view(request):
         return redirect('home')
     return render(request, 'caplogy_app/login.html')
 
-# @login_required
+@login_required
 def home_view(request):
     # Si l'utilisateur n'a aucun accès, afficher une page d'accueil vide/minimale
     if hasattr(request.user, 'userprofile') and request.user.userprofile.role == 'none':
@@ -44,7 +44,7 @@ def home_view(request):
     )
     return render(request, 'caplogy_app/home.html')
 
-# @login_required
+@login_required
 def category_view(request):
     try:
         api = MoodleAPI(
@@ -154,7 +154,7 @@ def category_view(request):
         root_categories = [cat for cat in categories if cat.get('parent', 0) == 0]
     return render(request, 'caplogy_app/category.html', {'categories': root_categories})
 
-# @login_required
+@login_required
 def subcategory_view(request, category_id):
     try:
         api = MoodleAPI(
@@ -247,7 +247,7 @@ def subcategory_view(request, category_id):
         'breadcrumb_path': breadcrumb_path
     })
 
-# @login_required
+@login_required
 def category_courses_view(request, category_id):
     """Vue pour afficher les cours d'une catégorie spécifique et de ses sous-catégories"""
     try:
@@ -366,7 +366,7 @@ def is_admin(user):
         return user.userprofile.role == 'admin'
     return False
 
-# @login_required
+@login_required
 @user_passes_test(is_admin)
 def admin_view(request):
     from django.contrib.auth.models import User
@@ -466,7 +466,7 @@ def delete_category_view(request):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Méthode non autorisée'})
 
-# @login_required
+@login_required
 def promote_to_admin(request):
     if request.method == 'POST':
         try:
@@ -875,7 +875,7 @@ def create_course(request, course_id=None):
     }
     return render(request, 'caplogy_app/create_course.html', context)
 
-# @login_required
+@login_required
 def delete_course(request, course_id):
     """Vue pour supprimer un cours"""
     if request.method != 'GET':
