@@ -1,20 +1,5 @@
 import os, json, hashlib
-from djan    def authenticate(self, username, password):
-        """
-        Authentifie via AD/LDAP, synchronise l'utilisateur Django/UserProfile
-        """
-        try:
-            print(f"Tentative de connexion LDAP vers {settings.AD_SERVER}")
-            server = Server(settings.AD_SERVER, get_info=None, use_ssl=True)
-            user_dn = f"{settings.AD_DOMAIN}\\{username}"
-            print(f"DN utilisateur: {user_dn}")
-            print(f"DEBUG: Tentative de bind avec le compte {user_dn}")
-            conn = Connection(
-                server,
-                user=user_dn,
-                password=password,
-                authentication=NTLM,
-                auto_bind=Falseettings
+from django.conf import settings
 from ..models import UserProfile
 from django.contrib.auth.models import User
 
@@ -49,7 +34,7 @@ class UserService:
 
     def authenticate(self, username, password):
         """
-        Authentifie via AD/LDAP, synchronise l’utilisateur Django/UserProfile
+        Authentifie via AD/LDAP, synchronise l'utilisateur Django/UserProfile
         """
         try:
             print(f"Tentative de connexion LDAP vers {settings.AD_SERVER}")
@@ -112,7 +97,7 @@ class UserService:
         Récupère tous les utilisateurs de l'OU Utilisateurs Caplogy (profs) depuis LDAP
         """
         try:
-            server = Server(settings.AD_SERVER, get_info=ALL, use_ssl=True)
+            server = Server(settings.AD_SERVER, get_info=None, use_ssl=True)
             # Connexion avec un compte de service (à adapter si besoin)
             conn = Connection(
                 server,
