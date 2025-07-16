@@ -62,17 +62,47 @@
         <div class="form-section">
             <div class="section-header">
                 <h2>Professeur(s) du cours</h2>
-                <p class="section-description">Sélectionnez un ou plusieurs professeurs à affecter au cours</p>
+                <p class="section-description">Gérez les professeurs assignés au cours</p>
             </div>
+            
+            {% if is_edit %}
+                <div id="current-teachers" class="current-teachers">
+                    <h4>Professeurs actuels :</h4>
+                    <div id="current-teachers-list" class="teachers-list">
+                        <em>Chargement...</em>
+                    </div>
+                </div>
+            {% endif %}
+            
             <div class="form-field">
-                <label for="profs">Professeurs</label>
-                <input type="text" id="prof-search" class="modern-input" placeholder="Rechercher un professeur..." style="margin-bottom:8px;">
-                <select id="profs" name="profs" class="modern-select" multiple size="6">
-                    {% for prof in profs %}
-                        <option value="{{ prof.username }}">{{ prof.name }} ({{ prof.username }})</option>
-                    {% endfor %}
-                </select>
-                <div id="selected-profs" style="margin-top:10px;"></div>
+                <label for="prof-dropdown">Ajouter des professeurs</label>
+                <div class="dropdown-container">
+                    <div class="dropdown-header" id="prof-dropdown" onclick="toggleProfDropdown()">
+                        <span id="prof-dropdown-text">Sélectionner des professeurs...</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div class="dropdown-content" id="prof-dropdown-content">
+                        <div class="dropdown-search">
+                            <input type="text" id="prof-search" placeholder="Rechercher un professeur..." onkeyup="filterProfs()">
+                        </div>
+                        <div class="dropdown-options" id="prof-options">
+                            {% for prof in profs %}
+                                <div class="dropdown-option" data-username="{{ prof.username }}" onclick="toggleProfSelection('{{ prof.username }}', '{{ prof.name }}')">
+                                    <input type="checkbox" id="prof-{{ prof.username }}" value="{{ prof.username }}">
+                                    <label for="prof-{{ prof.username }}">{{ prof.name }} ({{ prof.username }})</label>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="selected-profs" class="selected-profs">
+                    <h5>Professeurs sélectionnés :</h5>
+                    <div id="selected-profs-list"></div>
+                </div>
+                
+                <!-- Champ caché pour le formulaire -->
+                <input type="hidden" id="profs-hidden" name="profs" value="">
             </div>
         </div>
 
@@ -166,24 +196,236 @@
 
 <script src="{% static 'caplogy_app/js/create_course.js' %}"></script>
 <script>
-// Barre de recherche pour les profs
-const profSearch = document.getElementById('prof-search');
-const profSelect = document.getElementById('profs');
-profSearch.addEventListener('input', function() {
-    const filter = profSearch.value.toLowerCase();
-    Array.from(profSelect.options).forEach(opt => {
-        const text = opt.textContent.toLowerCase();
-        opt.style.display = text.includes(filter) ? '' : 'none';
-    });
-});
+// Détection du thème sombre
+function initTheme() {
+    const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyTheme = (e) => {
+        if (e.matches) {
+            document.body.classList.add('dark-theme');
+        } else {
+            document.body.classList.remove('dark-theme');
+        }
+    };
+    
+    applyTheme(darkModeQuery);
+    darkModeQuery.addEventListener('change', applyTheme);
+}
 
-// Affichage des profs sélectionnés
-const selectedProfsDiv = document.getElementById('selected-profs');
-profSelect.addEventListener('change', function() {
-    const selected = Array.from(profSelect.selectedOptions).map(opt => opt.textContent);
-    selectedProfsDiv.innerHTML = selected.length
-        ? '<strong>Professeurs sélectionnés :</strong><ul style="margin:4px 0 0 0;padding-left:18px;">' + selected.map(p => `<li>${p}</li>`).join('') + '</ul>'
-        : '';
+// Gestion du menu déroulant des professeurs
+let selectedProfs = new Set();
+
+// Fonction pour basculer l'affichage du menu déroulant
+function toggleProfDropdown() {
+    const dropdown = document.getElementById('prof-dropdown');
+    const content = document.getElementById('prof-dropdown-content');
+    
+    dropdown.classList.toggle('active');
+    content.classList.toggle('show');
+    
+    // Fermer le menu si on clique ailleurs
+    if (content.classList.contains('show')) {
+        document.addEventListener('click', closeProfDropdownOnClickOutside);
+    } else {
+        document.removeEventListener('click', closeProfDropdownOnClickOutside);
+    }
+}
+
+// Fonction pour fermer le menu déroulant si on clique à l'extérieur
+function closeProfDropdownOnClickOutside(event) {
+    const container = document.querySelector('.dropdown-container');
+    if (!container.contains(event.target)) {
+        const dropdown = document.getElementById('prof-dropdown');
+        const content = document.getElementById('prof-dropdown-content');
+        dropdown.classList.remove('active');
+        content.classList.remove('show');
+        document.removeEventListener('click', closeProfDropdownOnClickOutside);
+    }
+}
+
+// Fonction pour filtrer les professeurs
+function filterProfs() {
+    const filter = document.getElementById('prof-search').value.toLowerCase();
+    const options = document.querySelectorAll('.dropdown-option');
+    
+    options.forEach(option => {
+        const text = option.textContent.toLowerCase();
+        option.style.display = text.includes(filter) ? 'flex' : 'none';
+    });
+}
+
+// Fonction pour sélectionner/désélectionner un professeur
+function toggleProfSelection(username, profName) {
+    const checkbox = document.getElementById(`prof-${username}`);
+    const option = document.querySelector(`[data-username="${username}"]`);
+    
+    // Basculer l'état de la checkbox
+    checkbox.checked = !checkbox.checked;
+    
+    if (checkbox.checked) {
+        selectedProfs.add(username);
+        option.classList.add('selected');
+        addSelectedProfTag(username, profName);
+    } else {
+        selectedProfs.delete(username);
+        option.classList.remove('selected');
+        removeSelectedProfTag(username);
+    }
+    
+    updateProfDropdownText();
+    updateHiddenField();
+}
+
+// Fonction pour ajouter un tag de professeur sélectionné
+function addSelectedProfTag(username, profName) {
+    const selectedProfsList = document.getElementById('selected-profs-list');
+    
+    const tag = document.createElement('span');
+    tag.className = 'selected-prof-tag';
+    tag.dataset.username = username;
+    tag.innerHTML = `
+        ${profName}
+        <button type="button" class="selected-prof-remove" onclick="removeSelectedProf('${username}')">×</button>
+    `;
+    selectedProfsList.appendChild(tag);
+}
+
+// Fonction pour supprimer un tag de professeur sélectionné
+function removeSelectedProfTag(username) {
+    const tag = document.querySelector(`#selected-profs-list [data-username="${username}"]`);
+    if (tag) {
+        tag.remove();
+    }
+}
+
+// Fonction pour mettre à jour le texte du menu déroulant
+function updateProfDropdownText() {
+    const dropdownText = document.getElementById('prof-dropdown-text');
+    const count = selectedProfs.size;
+    
+    if (count === 0) {
+        dropdownText.textContent = 'Sélectionner des professeurs...';
+    } else if (count === 1) {
+        dropdownText.textContent = '1 professeur sélectionné';
+    } else {
+        dropdownText.textContent = `${count} professeurs sélectionnés`;
+    }
+}
+
+// Fonction pour mettre à jour le champ caché
+function updateHiddenField() {
+    const profsHidden = document.getElementById('profs-hidden');
+    profsHidden.value = Array.from(selectedProfs).join(',');
+}
+
+// Fonction globale pour supprimer un professeur sélectionné
+window.removeSelectedProf = function(username) {
+    selectedProfs.delete(username);
+    removeSelectedProfTag(username);
+    
+    // Décocher la checkbox correspondante
+    const checkbox = document.getElementById(`prof-${username}`);
+    const option = document.querySelector(`[data-username="${username}"]`);
+    if (checkbox) checkbox.checked = false;
+    if (option) option.classList.remove('selected');
+    
+    updateProfDropdownText();
+    updateHiddenField();
+};
+
+function initProfSelector() {
+    // Pas besoin d'initialisation spéciale, tout est géré par les fonctions onclick
+    updateProfDropdownText();
+}
+
+// Gestion des professeurs actuels en mode édition
+function initCurrentTeachers() {
+    if (!window.isEdit) return;
+    
+    const courseData = document.getElementById('course-data');
+    if (!courseData) return;
+    
+    const courseId = courseData.dataset.id;
+    const currentTeachersList = document.getElementById('current-teachers-list');
+    
+    // Récupérer les professeurs actuels
+    fetch(`/api/course/${courseId}/teachers/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.teachers && data.teachers.length > 0) {
+                currentTeachersList.innerHTML = '';
+                data.teachers.forEach(teacher => {
+                    const tag = document.createElement('span');
+                    tag.className = 'teacher-tag';
+                    tag.innerHTML = `
+                        ${teacher.firstname} ${teacher.lastname} (${teacher.username})
+                        <button type="button" class="teacher-remove" onclick="removeCurrentTeacher(${teacher.id}, '${teacher.username}')">×</button>
+                    `;
+                    currentTeachersList.appendChild(tag);
+                });
+            } else {
+                currentTeachersList.innerHTML = '<em style="color:#999;">Aucun professeur assigné</em>';
+            }
+        })
+        .catch(error => {
+            console.error('Erreur lors de la récupération des professeurs:', error);
+            currentTeachersList.innerHTML = '<em style="color:#d32f2f;">Erreur lors du chargement</em>';
+        });
+}
+
+// Fonction pour supprimer un professeur actuel
+window.removeCurrentTeacher = function(teacherId, username) {
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer ce professeur ?`)) {
+        return;
+    }
+    
+    const courseData = document.getElementById('course-data');
+    const courseId = courseData.dataset.id;
+    
+    fetch(`/api/course/${courseId}/teachers/remove/`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({
+            teacher_id: teacherId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Recharger la liste des professeurs actuels
+            initCurrentTeachers();
+            alert('Professeur supprimé avec succès');
+        } else {
+            alert('Erreur lors de la suppression: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        alert('Erreur lors de la suppression du professeur');
+    });
+};
+
+// Modifier le gestionnaire de soumission du formulaire
+document.addEventListener('DOMContentLoaded', function() {
+    initTheme();
+    initProfSelector();
+    initCurrentTeachers();
+    
+    // Rendre les fonctions globales accessibles
+    window.toggleProfDropdown = toggleProfDropdown;
+    window.filterProfs = filterProfs;
+    window.toggleProfSelection = toggleProfSelection;
+    
+    // Modifier la soumission du formulaire pour traiter les professeurs
+    const form = document.getElementById('course-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // Mettre à jour le champ caché avant soumission
+            updateHiddenField();
+        });
+    }
 });
 </script>
 {% endblock %}

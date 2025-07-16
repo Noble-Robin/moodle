@@ -27,6 +27,9 @@ urlpatterns = [
     path('courses/create/', views.create_course, name='create_course'),
     path('courses/edit/<int:course_id>/', views.create_course, name='edit_course'),
     path('courses/delete/<int:course_id>/', views.delete_course, name='delete_course'),
+    path('api/course/<int:course_id>/teachers/', views.get_course_teachers_api, name='get_course_teachers_api'),
+    path('api/course/<int:course_id>/teachers/add/', views.add_teacher_to_course_api, name='add_teacher_to_course_api'),
+    path('api/course/<int:course_id>/teachers/remove/', views.remove_teacher_from_course_api, name='remove_teacher_from_course_api'),
     path('nc_dir/', views.list_nc_dir, name='list_nc_dir'),
     path('categories/<int:category_id>/school-image/', school_image_upload, name='school_image_upload'),
 ]

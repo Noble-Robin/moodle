@@ -635,7 +635,11 @@ def create_course(request, course_id=None):
         cat_id = (request.POST.get('subsubcategory') or 
                   request.POST.get('subcategory') or 
                   request.POST.get('category'))
-        selected_profs = request.POST.getlist('profs')
+        # Traiter les professeurs sélectionnés
+        profs_data = request.POST.get('profs', '')
+        selected_profs = []
+        if profs_data:
+            selected_profs = [p.strip() for p in profs_data.split(',') if p.strip()]
         
         if not cat_id:
             messages.error(request, "Veuillez sélectionner une catégorie")
@@ -652,18 +656,20 @@ def create_course(request, course_id=None):
                 # Mettre à jour le cours existant
                 api.update_course(course_id, title, cat_id)
                 
-                # Affecter les profs sélectionnés au cours
+                # Affecter les profs sélectionnés au cours (ajouter aux professeurs existants)
                 if selected_profs:
-                    print(f"[DEBUG] Affectation des professeurs au cours {course_id}: {selected_profs}")
+                    print(f"[DEBUG] Ajout des professeurs au cours {course_id}: {selected_profs}")
                     try:
                         result = api.assign_teachers_to_course(course_id, selected_profs)
                         if result is not None:
-                            print(f"[DEBUG] Professeurs affectés avec succès: {selected_profs}")
+                            print(f"[DEBUG] Professeurs ajoutés avec succès: {selected_profs}")
                         else:
                             print(f"[WARNING] Aucun professeur n'a pu être affecté")
                     except Exception as prof_error:
-                        print(f"[ERROR] Erreur lors de l'affectation des professeurs: {prof_error}")
-                        messages.warning(request, f"Cours modifié mais erreur lors de l'affectation des professeurs: {prof_error}")
+                        print(f"[ERROR] Erreur lors de l'ajout des professeurs: {prof_error}")
+                        messages.warning(request, f"Cours modifié mais erreur lors de l'ajout des professeurs: {prof_error}")
+                # Note: Les professeurs existants ne sont plus supprimés automatiquement
+                # Ils doivent être supprimés individuellement via l'interface
                 
                 # Récupérer et traiter les sections pour l'édition
                 sections = [v for k,v in request.POST.items() if k.startswith('section_')]
@@ -1073,3 +1079,105 @@ def build_category_hierarchy_for_course(api, target_category_id):
         import traceback
         traceback.print_exc()
         return None, None
+
+@login_required
+def get_course_teachers_api(request, course_id):
+    """
+    API pour récupérer les professeurs d'un cours
+    """
+    try:
+        api = MoodleAPI(
+            url=os.getenv('MOODLE_URL'),
+            token=os.getenv('MOODLE_TOKEN')
+        )
+        
+        teachers = api.get_course_teachers(course_id)
+        
+        # Formatter les données pour le frontend
+        formatted_teachers = []
+        for teacher in teachers:
+            formatted_teachers.append({
+                'id': teacher.get('id'),
+                'username': teacher.get('username', ''),
+                'firstname': teacher.get('firstname', ''),
+                'lastname': teacher.get('lastname', ''),
+                'email': teacher.get('email', ''),
+                'fullname': f"{teacher.get('firstname', '')} {teacher.get('lastname', '')}".strip()
+            })
+        
+        return JsonResponse({
+            'teachers': formatted_teachers,
+            'count': len(formatted_teachers)
+        })
+        
+    except Exception as e:
+        print(f"Erreur lors de la récupération des professeurs du cours {course_id}: {e}")
+        return JsonResponse({
+            'error': f'Erreur lors de la récupération des professeurs: {str(e)}'
+        }, status=500)
+
+@login_required
+def add_teacher_to_course_api(request, course_id):
+    """
+    API pour ajouter un professeur à un cours
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Méthode non autorisée'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        username = data.get('username')
+        
+        if not username:
+            return JsonResponse({'error': 'Username requis'}, status=400)
+        
+        api = MoodleAPI(
+            url=os.getenv('MOODLE_URL'),
+            token=os.getenv('MOODLE_TOKEN')
+        )
+        
+        result = api.assign_teachers_to_course(course_id, [username])
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Professeur {username} ajouté avec succès'
+        })
+        
+    except Exception as e:
+        print(f"Erreur lors de l'ajout du professeur au cours {course_id}: {e}")
+        return JsonResponse({
+            'error': f'Erreur lors de l\'ajout du professeur: {str(e)}'
+        }, status=500)
+
+@login_required
+def remove_teacher_from_course_api(request, course_id):
+    """
+    API pour supprimer un professeur d'un cours
+    """
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Méthode non autorisée'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        teacher_id = data.get('teacher_id')
+        
+        if not teacher_id:
+            return JsonResponse({'error': 'teacher_id requis'}, status=400)
+        
+        api = MoodleAPI(
+            url=os.getenv('MOODLE_URL'),
+            token=os.getenv('MOODLE_TOKEN')
+        )
+        
+        result = api.remove_teachers_from_course(course_id, [teacher_id])
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Professeur supprimé avec succès'
+        })
+        
+    except Exception as e:
+        print(f"Erreur lors de la suppression du professeur du cours {course_id}: {e}")
+        return JsonResponse({
+            'error': f'Erreur lors de la suppression du professeur: {str(e)}'
+        }, status=500)

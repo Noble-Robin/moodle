@@ -28,6 +28,118 @@ class MoodleAPI:
         except Exception as e:
             print(f"Erreur lors de la récupération des enseignants du cours {course_id}: {e}")
             return []
+    
+    def remove_teachers_from_course(self, course_id, usernames_or_ids):
+        """
+        Supprime des professeurs d'un cours
+        Peut prendre des usernames ou des user IDs
+        """
+        if not usernames_or_ids:
+            return None
+        
+        # Convertir les usernames en IDs si nécessaire
+        userids = []
+        for identifier in usernames_or_ids:
+            if isinstance(identifier, int) or str(identifier).isdigit():
+                # C'est déjà un ID
+                userids.append(int(identifier))
+            else:
+                # C'est un username, il faut le convertir en ID
+                try:
+                    params = {'field': 'username', 'values[0]': identifier}
+                    result = self._request('core_user_get_users_by_field', params)
+                    if isinstance(result, list) and result:
+                        userids.append(result[0]['id'])
+                        print(f"[DEBUG] Username {identifier} -> ID {result[0]['id']}")
+                    else:
+                        print(f"[WARNING] Username {identifier} non trouvé pour suppression")
+                except Exception as e:
+                    print(f"[ERROR] Erreur lors de la recherche de {identifier}: {e}")
+        
+        if not userids:
+            print("[WARNING] Aucun utilisateur valide trouvé pour la suppression")
+            return None
+        
+        # Supprimer les utilisateurs du cours
+        try:
+            params = {}
+            for i, uid in enumerate(userids):
+                params[f'enrolments[{i}][userid]'] = uid
+                params[f'enrolments[{i}][courseid]'] = course_id
+            
+            print(f"[DEBUG] Suppression des utilisateurs {userids} du cours {course_id}")
+            result = self._request('enrol_manual_unenrol_users', params)
+            print(f"[DEBUG] Résultat suppression: {result}")
+            return result
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de la suppression des professeurs: {e}")
+            raise
+    
+    def replace_course_teachers(self, course_id, new_usernames):
+        """
+        Remplace tous les professeurs d'un cours par une nouvelle liste
+        1. Récupère les professeurs actuels
+        2. Les supprime tous
+        3. Ajoute les nouveaux professeurs
+        """
+        try:
+            # 1. Récupérer les professeurs actuels
+            current_teachers = self.get_course_teachers(course_id)
+            print(f"[DEBUG] Professeurs actuels du cours {course_id}: {[t.get('username', t.get('id')) for t in current_teachers]}")
+            
+            # 2. Supprimer tous les professeurs actuels
+            if current_teachers:
+                current_teacher_ids = [t['id'] for t in current_teachers]
+                print(f"[DEBUG] Suppression des professeurs actuels: {current_teacher_ids}")
+                try:
+                    self.remove_teachers_from_course(course_id, current_teacher_ids)
+                    print(f"[DEBUG] Professeurs actuels supprimés")
+                except Exception as e:
+                    print(f"[WARNING] Erreur lors de la suppression des professeurs actuels: {e}")
+            
+            # 3. Ajouter les nouveaux professeurs
+            if new_usernames:
+                print(f"[DEBUG] Ajout des nouveaux professeurs: {new_usernames}")
+                result = self.assign_teachers_to_course(course_id, new_usernames)
+                print(f"[DEBUG] Nouveaux professeurs ajoutés")
+                return result
+            
+            return None
+            
+        except Exception as e:
+            print(f"[ERROR] Erreur lors du remplacement des professeurs: {e}")
+            raise
+    
+    def add_teachers_to_course(self, course_id, new_usernames):
+        """
+        Ajoute des professeurs à un cours sans supprimer les existants
+        """
+        try:
+            if new_usernames:
+                print(f"[DEBUG] Ajout de nouveaux professeurs: {new_usernames}")
+                result = self.assign_teachers_to_course(course_id, new_usernames)
+                print(f"[DEBUG] Nouveaux professeurs ajoutés")
+                return result
+            
+            return None
+            
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de l'ajout des professeurs: {e}")
+            raise
+    
+    def remove_specific_teacher(self, course_id, teacher_id):
+        """
+        Supprime un professeur spécifique d'un cours
+        """
+        try:
+            print(f"[DEBUG] Suppression du professeur {teacher_id} du cours {course_id}")
+            result = self.remove_teachers_from_course(course_id, [teacher_id])
+            print(f"[DEBUG] Professeur supprimé")
+            return result
+            
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de la suppression du professeur: {e}")
+            raise
     def __init__(self, url: str, token: str, fmt: str = 'json'):
         self.base = url
         self.token = token
@@ -783,10 +895,20 @@ class MoodleAPI:
         """
         Affecte un ou plusieurs profs (usernames LDAP) au cours comme enseignants (roleid=3 par défaut sur Moodle)
         Utilise enrol_manual_enrol_users (plus fiable pour l'enrôlement dans un cours).
-        Si la recherche par username échoue, essaie par email.
+        Recherche les utilisateurs par username, puis par email si nécessaire.
         """
         if not usernames:
             return None
+        
+        # Récupérer les informations complètes des professeurs LDAP
+        from ..services.user_service import UserService
+        user_service = UserService()
+        ldap_profs = user_service.get_ldap_profs()
+        
+        # Créer un mapping username -> email pour les professeurs LDAP
+        username_to_email = {}
+        for prof in ldap_profs:
+            username_to_email[prof['username']] = prof.get('mail', '')
         
         # Récupérer les userids Moodle à partir des usernames
         userids = []
@@ -794,27 +916,56 @@ class MoodleAPI:
         
         for username in usernames:
             try:
-                # Essayer d'abord par username
+                user_found = False
+                
+                # 1. Essayer d'abord par username
+                print(f"[DEBUG] Recherche par username: {username}")
                 params = {'field': 'username', 'values[0]': username}
                 result = self._request('core_user_get_users_by_field', params)
                 if isinstance(result, list) and result:
                     userids.append(result[0]['id'])
                     print(f"[DEBUG] Utilisateur trouvé par username: {username} -> ID {result[0]['id']}")
+                    user_found = True
                 else:
-                    # Si username échoue, essayer par email
-                    print(f"[DEBUG] Username {username} non trouvé, essai par email...")
-                    params = {
-                        'criteria[0][key]': 'email',
-                        'criteria[0][value]': username
-                    }
-                    result = self._request('core_user_get_users', params)
-                    users = result.get('users', []) if isinstance(result, dict) else []
-                    if users:
-                        userids.append(users[0]['id'])
-                        print(f"[DEBUG] Utilisateur trouvé par email: {username} -> ID {users[0]['id']}")
-                    else:
-                        failed_usernames.append(username)
-                        print(f"[WARNING] Utilisateur non trouvé ni par username ni par email: {username}")
+                    print(f"[DEBUG] Username {username} non trouvé dans Moodle")
+                
+                # 2. Si username échoue, essayer par email
+                if not user_found and username in username_to_email:
+                    email = username_to_email[username]
+                    if email:
+                        print(f"[DEBUG] Recherche par email: {email}")
+                        params = {
+                            'criteria[0][key]': 'email',
+                            'criteria[0][value]': email
+                        }
+                        result = self._request('core_user_get_users', params)
+                        users = result.get('users', []) if isinstance(result, dict) else []
+                        if users:
+                            userids.append(users[0]['id'])
+                            print(f"[DEBUG] Utilisateur trouvé par email: {email} -> ID {users[0]['id']}")
+                            user_found = True
+                        else:
+                            print(f"[DEBUG] Email {email} non trouvé dans Moodle")
+                
+                # 3. Si rien ne fonctionne, essayer directement username comme email
+                if not user_found:
+                    if '@' in username:
+                        print(f"[DEBUG] Tentative avec username comme email: {username}")
+                        params = {
+                            'criteria[0][key]': 'email',
+                            'criteria[0][value]': username
+                        }
+                        result = self._request('core_user_get_users', params)
+                        users = result.get('users', []) if isinstance(result, dict) else []
+                        if users:
+                            userids.append(users[0]['id'])
+                            print(f"[DEBUG] Utilisateur trouvé par email direct: {username} -> ID {users[0]['id']}")
+                            user_found = True
+                
+                if not user_found:
+                    failed_usernames.append(username)
+                    print(f"[WARNING] Utilisateur non trouvé: {username}")
+                
             except Exception as e:
                 failed_usernames.append(username)
                 print(f"[ERROR] Erreur lors de la recherche de l'utilisateur {username}: {e}")
@@ -827,39 +978,56 @@ class MoodleAPI:
             return None
             
         # Enrôler les users comme enseignants dans le cours (roleid=3)
+        print(f"[DEBUG] Enrôlement de {len(userids)} utilisateurs dans le cours {course_id}")
         return self._enrol_users_to_course(course_id, userids, role_id=3)
     
-    def assign_teachers_by_email(self, course_id, emails):
+    def assign_teachers_by_email_simple(self, course_id, emails):
         """
-        Affecte un ou plusieurs profs (emails) au cours comme enseignants (roleid=3 par défaut sur Moodle)
-        Basé sur la logique d'ajoutprof.py qui utilise les emails
+        Version simplifiée qui utilise exactement la même logique que ajoutprof.py
         """
         if not emails:
             return None
-        # Récupérer les userids Moodle à partir des emails
-        userids = []
-        for email in emails:
-            try:
-                params = {
-                    'criteria[0][key]': 'email',
-                    'criteria[0][value]': email
-                }
-                result = self._request('core_user_get_users', params)
-                users = result.get('users', []) if isinstance(result, dict) else []
-                if users:
-                    userids.append(users[0]['id'])
-                    print(f"[DEBUG] Utilisateur trouvé par email: {email} -> ID {users[0]['id']}")
-                else:
-                    print(f"[WARNING] Utilisateur non trouvé par email: {email}")
-            except Exception as e:
-                print(f"[ERROR] Erreur lors de la recherche de l'utilisateur {email}: {e}")
         
-        if not userids:
-            print("[WARNING] Aucun utilisateur valide trouvé pour l'affectation")
-            return None
+        print(f"[DEBUG] Affectation par email simple: {emails}")
+        
+        try:
+            # Récupérer les userids Moodle à partir des emails (comme ajoutprof.py)
+            userids = []
+            for email in emails:
+                try:
+                    params = {
+                        'criteria[0][key]': 'email',
+                        'criteria[0][value]': email
+                    }
+                    result = self._request('core_user_get_users', params)
+                    users = result.get('users', []) if isinstance(result, dict) else []
+                    if users:
+                        userids.append(users[0]['id'])
+                        print(f"[DEBUG] Utilisateur trouvé: {email} -> ID {users[0]['id']}")
+                    else:
+                        print(f"[WARNING] Utilisateur non trouvé pour l'email: {email}")
+                except Exception as e:
+                    print(f"[ERROR] Erreur pour l'email {email}: {e}")
             
-        # Enrôler les users comme enseignants dans le cours (roleid=3)
-        return self._enrol_users_to_course(course_id, userids, role_id=3)
+            if not userids:
+                print("[WARNING] Aucun utilisateur trouvé")
+                return None
+            
+            # Enrôler directement (comme ajoutprof.py)
+            params = {}
+            for i, uid in enumerate(userids):
+                params[f'enrolments[{i}][roleid]'] = 3  # 3 = teacher
+                params[f'enrolments[{i}][userid]'] = uid
+                params[f'enrolments[{i}][courseid]'] = course_id
+            
+            print(f"[DEBUG] Paramètres d'enrôlement: {params}")
+            result = self._request('enrol_manual_enrol_users', params)
+            print(f"[DEBUG] Résultat enrôlement: {result}")
+            return result
+            
+        except Exception as e:
+            print(f"[ERROR] Erreur dans assign_teachers_by_email_simple: {e}")
+            raise
     
     def _enrol_users_to_course(self, course_id, userids, role_id=3):
         """
@@ -873,6 +1041,7 @@ class MoodleAPI:
                 params[f'enrolments[{i}][userid]'] = uid
                 params[f'enrolments[{i}][courseid]'] = course_id
             
+            print(f"[DEBUG] Paramètres d'enrôlement: {params}")
             result = self._request('enrol_manual_enrol_users', params)
             print(f"[DEBUG] Enrôlement réussi - course_id={course_id}, userids={userids}, role_id={role_id}")
             print(f"[DEBUG] Résultat API: {result}")
@@ -880,3 +1049,44 @@ class MoodleAPI:
         except Exception as e:
             print(f"[ERROR] Erreur lors de l'enrôlement: {e}")
             raise
+    
+    def debug_find_users_in_moodle(self, usernames):
+        """
+        Méthode de débogage pour voir quels utilisateurs sont disponibles dans Moodle
+        """
+        print(f"[DEBUG] Recherche de {len(usernames)} utilisateurs dans Moodle...")
+        
+        # Récupérer quelques utilisateurs pour voir la structure
+        try:
+            all_users = self._request('core_user_get_users', {'criteria[0][key]': 'id', 'criteria[0][value]': '1'})
+            print(f"[DEBUG] Exemple d'utilisateur Moodle: {all_users}")
+        except Exception as e:
+            print(f"[DEBUG] Erreur lors de la récupération d'exemple: {e}")
+        
+        for username in usernames:
+            print(f"\n[DEBUG] === Recherche de {username} ===")
+            
+            # Par username
+            try:
+                params = {'field': 'username', 'values[0]': username}
+                result = self._request('core_user_get_users_by_field', params)
+                print(f"[DEBUG] Par username: {result}")
+            except Exception as e:
+                print(f"[DEBUG] Erreur recherche par username: {e}")
+            
+            # Par email
+            try:
+                params = {'criteria[0][key]': 'email', 'criteria[0][value]': username}
+                result = self._request('core_user_get_users', params)
+                print(f"[DEBUG] Par email: {result}")
+            except Exception as e:
+                print(f"[DEBUG] Erreur recherche par email: {e}")
+            
+            # Par email si c'est un email
+            if '@' in username:
+                try:
+                    params = {'criteria[0][key]': 'email', 'criteria[0][value]': username}
+                    result = self._request('core_user_get_users', params)
+                    print(f"[DEBUG] Par email direct: {result}")
+                except Exception as e:
+                    print(f"[DEBUG] Erreur recherche par email direct: {e}")
