@@ -41,20 +41,32 @@ class MoodleAPI:
         userids = []
         for identifier in usernames_or_ids:
             if isinstance(identifier, int) or str(identifier).isdigit():
-                # C'est déjà un ID
                 userids.append(int(identifier))
             else:
-                # C'est un username, il faut le convertir en ID
+                # Recherche par email
+                email = f"{identifier}@caplogy.com"
                 try:
-                    params = {'field': 'username', 'values[0]': identifier}
-                    result = self._request('core_user_get_users_by_field', params)
-                    if isinstance(result, list) and result:
-                        userids.append(result[0]['id'])
-                        print(f"[DEBUG] Username {identifier} -> ID {result[0]['id']}")
-                    else:
-                        print(f"[WARNING] Username {identifier} non trouvé pour suppression")
+                    params = {'criteria[0][key]': 'email', 'criteria[0][value]': email}
+                    result = self._request('core_user_get_users', params)
+                    users = result.get('users', []) if isinstance(result, dict) else []
+                    if users:
+                        userids.append(users[0]['id'])
+                        print(f"[DEBUG] Email {email} -> ID {users[0]['id']}")
+                        continue
                 except Exception as e:
-                    print(f"[ERROR] Erreur lors de la recherche de {identifier}: {e}")
+                    print(f"[ERROR] Erreur lors de la recherche par email {email}: {e}")
+                # Recherche par idnumber
+                try:
+                    params = {'criteria[0][key]': 'idnumber', 'criteria[0][value]': identifier}
+                    result = self._request('core_user_get_users', params)
+                    users = result.get('users', []) if isinstance(result, dict) else []
+                    if users:
+                        userids.append(users[0]['id'])
+                        print(f"[DEBUG] idnumber {identifier} -> ID {users[0]['id']}")
+                        continue
+                except Exception as e:
+                    print(f"[ERROR] Erreur lors de la recherche par idnumber {identifier}: {e}")
+                print(f"[WARNING] Username {identifier} non trouvé pour suppression")
         
         if not userids:
             print("[WARNING] Aucun utilisateur valide trouvé pour la suppression")
@@ -918,16 +930,33 @@ class MoodleAPI:
             try:
                 user_found = False
                 
-                # 1. Essayer d'abord par username
-                print(f"[DEBUG] Recherche par username: {username}")
-                params = {'field': 'username', 'values[0]': username}
-                result = self._request('core_user_get_users_by_field', params)
-                if isinstance(result, list) and result:
-                    userids.append(result[0]['id'])
-                    print(f"[DEBUG] Utilisateur trouvé par username: {username} -> ID {result[0]['id']}")
-                    user_found = True
-                else:
-                    print(f"[DEBUG] Username {username} non trouvé dans Moodle")
+                # Recherche par email
+                email = username_to_email.get(username, f"{username}@caplogy.com")
+                try:
+                    params = {'criteria[0][key]': 'email', 'criteria[0][value]': email}
+                    result = self._request('core_user_get_users', params)
+                    users = result.get('users', []) if isinstance(result, dict) else []
+                    if users:
+                        userids.append(users[0]['id'])
+                        print(f"[DEBUG] Utilisateur trouvé par email: {email} -> ID {users[0]['id']}")
+                        user_found = True
+                except Exception as e:
+                    print(f"[ERROR] Erreur lors de la recherche par email {email}: {e}")
+                # Recherche par idnumber si email échoue
+                if not user_found:
+                    try:
+                        params = {'criteria[0][key]': 'idnumber', 'criteria[0][value]': username}
+                        result = self._request('core_user_get_users', params)
+                        users = result.get('users', []) if isinstance(result, dict) else []
+                        if users:
+                            userids.append(users[0]['id'])
+                            print(f"[DEBUG] Utilisateur trouvé par idnumber: {username} -> ID {users[0]['id']}")
+                            user_found = True
+                    except Exception as e:
+                        print(f"[ERROR] Erreur lors de la recherche par idnumber {username}: {e}")
+                if not user_found:
+                    failed_usernames.append(username)
+                    print(f"[WARNING] Utilisateur non trouvé: {username}")
                 
                 # 2. Si username échoue, essayer par email
                 if not user_found and username in username_to_email:
@@ -1066,13 +1095,21 @@ class MoodleAPI:
         for username in usernames:
             print(f"\n[DEBUG] === Recherche de {username} ===")
             
-            # Par username
+            # Par email
             try:
-                params = {'field': 'username', 'values[0]': username}
-                result = self._request('core_user_get_users_by_field', params)
-                print(f"[DEBUG] Par username: {result}")
+                email = f"{username}@caplogy.com"
+                params = {'criteria[0][key]': 'email', 'criteria[0][value]': email}
+                result = self._request('core_user_get_users', params)
+                print(f"[DEBUG] Par email: {result}")
             except Exception as e:
-                print(f"[DEBUG] Erreur recherche par username: {e}")
+                print(f"[DEBUG] Erreur recherche par email: {e}")
+            # Par idnumber
+            try:
+                params = {'criteria[0][key]': 'idnumber', 'criteria[0][value]': username}
+                result = self._request('core_user_get_users', params)
+                print(f"[DEBUG] Par idnumber: {result}")
+            except Exception as e:
+                print(f"[DEBUG] Erreur recherche par idnumber: {e}")
             
             # Par email
             try:
