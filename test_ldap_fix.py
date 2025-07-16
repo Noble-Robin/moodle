@@ -18,9 +18,9 @@ from caplogy_app.services.user_service import UserService
 def test_ldap_connection():
     print("=== Test de connexion LDAP ===")
     
-    # Remplacez ces valeurs par des identifiants de test valides
-    test_username = "r.noble"  # Changez selon votre environnement
-    test_password = "votre_mot_de_passe"  # Changez selon votre environnement
+    # Utilisation des identifiants qui fonctionnaient dans le test initial
+    test_username = "t.frescaline"  # Identifiants qui fonctionnaient
+    test_password = "&NC$U&QS*8cbiy"  # Mot de passe qui fonctionnait
     
     user_service = UserService()
     
