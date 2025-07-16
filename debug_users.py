@@ -70,11 +70,12 @@ def find_user_in_moodle(username):
             url=os.getenv('MOODLE_URL'),
             token=os.getenv('MOODLE_TOKEN')
         )
-        
+
         # Recherche par username
         try:
             params = {'field': 'username', 'values[0]': username}
             result = api._request('core_user_get_users_by_field', params)
+            print(f"Réponse brute username: {result}")
             if isinstance(result, list) and result:
                 user = result[0]
                 print(f"✅ Trouvé par username: {user}")
@@ -83,12 +84,13 @@ def find_user_in_moodle(username):
                 print(f"❌ Username '{username}' non trouvé dans Moodle")
         except Exception as e:
             print(f"❌ Erreur lors de la recherche par username: {e}")
-        
+
         # Recherche par email
         try:
             email = f"{username}@caplogy.com"
             params = {'criteria[0][key]': 'email', 'criteria[0][value]': email}
             result = api._request('core_user_get_users', params)
+            print(f"Réponse brute email: {result}")
             users = result.get('users', []) if isinstance(result, dict) else []
             if users:
                 user = users[0]
@@ -98,10 +100,25 @@ def find_user_in_moodle(username):
                 print(f"❌ Email '{email}' non trouvé dans Moodle")
         except Exception as e:
             print(f"❌ Erreur lors de la recherche par email: {e}")
-        
+
+        # Recherche par idnumber
+        try:
+            params = {'criteria[0][key]': 'idnumber', 'criteria[0][value]': username}
+            result = api._request('core_user_get_users', params)
+            print(f"Réponse brute idnumber: {result}")
+            users = result.get('users', []) if isinstance(result, dict) else []
+            if users:
+                user = users[0]
+                print(f"✅ Trouvé par idnumber: {user}")
+                return user
+            else:
+                print(f"❌ idnumber '{username}' non trouvé dans Moodle")
+        except Exception as e:
+            print(f"❌ Erreur lors de la recherche par idnumber: {e}")
+
         print(f"❌ Utilisateur '{username}' non trouvé dans Moodle")
         return None
-        
+
     except Exception as e:
         print(f"❌ Erreur lors de la recherche: {e}")
         return None
