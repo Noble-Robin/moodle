@@ -3,6 +3,7 @@ venv/
 env/
 .venv/
 
+
 # Base de données
 db.sqlite3
 *.db
@@ -42,4 +43,13 @@ Thumbs.db
 
 # Fichiers de test temporaires
 test_*.py.bak
+
+# Fichiers d'archive et extractions
+*.zip
+*.rar
+*.tar
+*.tar.gz
+*.7z
+automatisation_moodle*/
+**/automatisation_moodle*/
 

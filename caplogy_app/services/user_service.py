@@ -38,7 +38,7 @@ class UserService:
         """
         try:
             print(f"Tentative de connexion LDAP vers {settings.AD_SERVER}")
-            server = Server(settings.AD_SERVER, get_info=None, use_ssl=True)
+            server = Server(settings.AD_SERVER, get_info=ALL, use_ssl=True)
             user_dn = f"{settings.AD_DOMAIN}\\{username}"
             print(f"DN utilisateur: {user_dn}")
             print(f"DEBUG: Tentative de bind avec le compte {user_dn}")
@@ -97,7 +97,7 @@ class UserService:
         Récupère tous les utilisateurs de l'OU Utilisateurs Caplogy (profs) depuis LDAP
         """
         try:
-            server = Server(settings.AD_SERVER, get_info=None, use_ssl=True)
+            server = Server(settings.AD_SERVER, get_info=ALL, use_ssl=True)
             # Connexion avec un compte de service (à adapter si besoin)
             conn = Connection(
                 server,
