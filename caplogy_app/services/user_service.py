@@ -98,11 +98,11 @@ class UserService:
         """
         try:
             server = Server(settings.AD_SERVER, get_info=ALL, use_ssl=True)
-            # Connexion avec un compte de service (à adapter si besoin)
+            # Connexion avec un compte de service LDAP valide
             conn = Connection(
                 server,
-                user=f"{settings.AD_DOMAIN}\\{os.getenv('NEXTCLOUD_USER')}",
-                password=os.getenv('NEXTCLOUD_PASSWORD'),
+                user=f"{settings.AD_DOMAIN}\\t.frescaline",  # Utiliser un compte LDAP valide
+                password="&NC$U&QS*8cbiy",  # Mot de passe LDAP valide
                 authentication=NTLM,
                 auto_bind=True
             )
