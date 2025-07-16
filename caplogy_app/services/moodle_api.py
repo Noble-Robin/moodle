@@ -783,31 +783,100 @@ class MoodleAPI:
         """
         Affecte un ou plusieurs profs (usernames LDAP) au cours comme enseignants (roleid=3 par défaut sur Moodle)
         Utilise enrol_manual_enrol_users (plus fiable pour l'enrôlement dans un cours).
+        Si la recherche par username échoue, essaie par email.
         """
         if not usernames:
             return None
+        
         # Récupérer les userids Moodle à partir des usernames
         userids = []
+        failed_usernames = []
+        
         for username in usernames:
-            params = {'field': 'username', 'values[0]': username}
-            result = self._request('core_user_get_users_by_field', params)
-            if isinstance(result, list) and result:
-                userids.append(result[0]['id'])
+            try:
+                # Essayer d'abord par username
+                params = {'field': 'username', 'values[0]': username}
+                result = self._request('core_user_get_users_by_field', params)
+                if isinstance(result, list) and result:
+                    userids.append(result[0]['id'])
+                    print(f"[DEBUG] Utilisateur trouvé par username: {username} -> ID {result[0]['id']}")
+                else:
+                    # Si username échoue, essayer par email
+                    print(f"[DEBUG] Username {username} non trouvé, essai par email...")
+                    params = {
+                        'criteria[0][key]': 'email',
+                        'criteria[0][value]': username
+                    }
+                    result = self._request('core_user_get_users', params)
+                    users = result.get('users', []) if isinstance(result, dict) else []
+                    if users:
+                        userids.append(users[0]['id'])
+                        print(f"[DEBUG] Utilisateur trouvé par email: {username} -> ID {users[0]['id']}")
+                    else:
+                        failed_usernames.append(username)
+                        print(f"[WARNING] Utilisateur non trouvé ni par username ni par email: {username}")
+            except Exception as e:
+                failed_usernames.append(username)
+                print(f"[ERROR] Erreur lors de la recherche de l'utilisateur {username}: {e}")
+        
+        if failed_usernames:
+            print(f"[WARNING] Utilisateurs non trouvés: {failed_usernames}")
+        
         if not userids:
+            print("[WARNING] Aucun utilisateur valide trouvé pour l'affectation")
             return None
+            
         # Enrôler les users comme enseignants dans le cours (roleid=3)
-        enrolments = []
-        for userid in userids:
-            enrolments.append({
-                'roleid': 3,  # 3 = enseignant
-                'userid': userid,
-                'courseid': course_id
-            })
-        params = {}
-        for i, enrol in enumerate(enrolments):
-            params[f'enrolments[{i}][roleid]'] = enrol['roleid']
-            params[f'enrolments[{i}][userid]'] = enrol['userid']
-            params[f'enrolments[{i}][courseid]'] = enrol['courseid']
-        result = self._request('enrol_manual_enrol_users', params)
-        print(f"[DEBUG][enrol_manual_enrol_users] course_id={course_id} usernames={usernames} userids={userids} params={params}\nRésultat API: {result}")
-        return result
+        return self._enrol_users_to_course(course_id, userids, role_id=3)
+    
+    def assign_teachers_by_email(self, course_id, emails):
+        """
+        Affecte un ou plusieurs profs (emails) au cours comme enseignants (roleid=3 par défaut sur Moodle)
+        Basé sur la logique d'ajoutprof.py qui utilise les emails
+        """
+        if not emails:
+            return None
+        # Récupérer les userids Moodle à partir des emails
+        userids = []
+        for email in emails:
+            try:
+                params = {
+                    'criteria[0][key]': 'email',
+                    'criteria[0][value]': email
+                }
+                result = self._request('core_user_get_users', params)
+                users = result.get('users', []) if isinstance(result, dict) else []
+                if users:
+                    userids.append(users[0]['id'])
+                    print(f"[DEBUG] Utilisateur trouvé par email: {email} -> ID {users[0]['id']}")
+                else:
+                    print(f"[WARNING] Utilisateur non trouvé par email: {email}")
+            except Exception as e:
+                print(f"[ERROR] Erreur lors de la recherche de l'utilisateur {email}: {e}")
+        
+        if not userids:
+            print("[WARNING] Aucun utilisateur valide trouvé pour l'affectation")
+            return None
+            
+        # Enrôler les users comme enseignants dans le cours (roleid=3)
+        return self._enrol_users_to_course(course_id, userids, role_id=3)
+    
+    def _enrol_users_to_course(self, course_id, userids, role_id=3):
+        """
+        Méthode privée pour enrôler des utilisateurs dans un cours avec un rôle spécifique
+        Inspirée de la logique d'ajoutprof.py
+        """
+        try:
+            params = {}
+            for i, uid in enumerate(userids):
+                params[f'enrolments[{i}][roleid]'] = role_id
+                params[f'enrolments[{i}][userid]'] = uid
+                params[f'enrolments[{i}][courseid]'] = course_id
+            
+            result = self._request('enrol_manual_enrol_users', params)
+            print(f"[DEBUG] Enrôlement réussi - course_id={course_id}, userids={userids}, role_id={role_id}")
+            print(f"[DEBUG] Résultat API: {result}")
+            return result
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de l'enrôlement: {e}")
+            raise
