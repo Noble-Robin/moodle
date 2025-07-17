@@ -11,6 +11,10 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'votre-clé-secrète-à-remplacer')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://intranet.caplogy.com',
+]
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
