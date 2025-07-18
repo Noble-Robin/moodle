@@ -1,4 +1,4 @@
-# Caplogy
+# Caplogy T
 
 Application de découverte et de partage de contenus pédagogiques intégrant Moodle et Nextcloud.
 
