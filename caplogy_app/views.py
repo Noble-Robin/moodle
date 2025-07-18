@@ -4,6 +4,7 @@ from django.http import JsonResponse
 import json
 import os
 import time
+import requests
 
 from django.contrib.auth import login as dj_login, logout as dj_logout
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -973,12 +974,32 @@ def list_nc_dir(request):
         print(f"[DEBUG] Résultat: {len(folders)} dossiers, {len(files)} fichiers")
         
         return JsonResponse({'folders': folders, 'files': files})
+    except requests.exceptions.Timeout:
+        error_msg = f'Timeout Nextcloud: Le serveur met trop de temps à répondre (>{nc_api.timeout[1]}s). Réessayez ou contactez l\'administrateur.'
+        print(f"[ERROR] {error_msg}")
+        return JsonResponse({
+            'error': error_msg,
+            'error_type': 'timeout',
+            'retry_suggestion': 'Réessayez dans quelques instants ou contactez l\'administrateur système.'
+        }, status=408)
+    except requests.exceptions.ConnectionError:
+        error_msg = f'Erreur de connexion Nextcloud: Impossible de joindre le serveur. Vérifiez votre connexion réseau.'
+        print(f"[ERROR] {error_msg}")
+        return JsonResponse({
+            'error': error_msg,
+            'error_type': 'connection',
+            'retry_suggestion': 'Vérifiez votre connexion réseau et réessayez.'
+        }, status=503)
     except Exception as e:
         error_msg = f'Erreur lors de la lecture du répertoire: {str(e)}'
         print(f"[ERROR] {error_msg}")
         import traceback
         print(f"[ERROR] Traceback: {traceback.format_exc()}")
-        return JsonResponse({'error': error_msg}, status=500)
+        return JsonResponse({
+            'error': error_msg,
+            'error_type': 'general',
+            'retry_suggestion': 'Réessayez ou contactez l\'administrateur si le problème persiste.'
+        }, status=500)
 
 def categories_api(request):
     try:
