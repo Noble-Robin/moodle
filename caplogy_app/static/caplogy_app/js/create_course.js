@@ -245,8 +245,11 @@ document.addEventListener('DOMContentLoaded', () => {
             controller.abort();
         }, 60000); // 60 secondes
 
+        // Nettoyer le chemin avant l'encodage
+        const cleanedPath = path.trim().replace(/\\/g, '/');
+
         // Faire l'appel AJAX pour récupérer les fichiers Nextcloud
-        fetch(`/nc_dir/?path=${encodeURIComponent(path)}`, {
+        fetch(`/nc_dir/?path=${encodeURIComponent(cleanedPath)}`, {
             signal: controller.signal,
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
