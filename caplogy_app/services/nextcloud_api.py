@@ -23,8 +23,8 @@ class NextcloudAPI:
             'Cache-Control': 'no-cache'
         }
         
-        # Timeouts optimisés
-        self.timeout = (10, 30)  # (connect_timeout, read_timeout)
+        # Pas de timeout - attendre indéfiniment
+        self.timeout = None
 
     def list_nc_dir(self, path):
         # S'assurer que le chemin commence par /Shared/Biblio_Cours_Caplogy
@@ -35,83 +35,56 @@ class NextcloudAPI:
             else:
                 path = biblio_path + '/' + path
         
-        # Retry logic pour gérer les timeouts
-        max_retries = 2
-        retry_delay = 2
-
-        while True:
-            try:
-                url = self.webdav + path
-                print(f"[NextcloudAPI] URL construite: {url} (tentative {attempt + 1})")
-                print(f"[NextcloudAPI] Auth user: {self.auth[0]}")
-                
-                headers = {**self.default_headers, 'Depth': '1'}
-                print(f"[NextcloudAPI] Envoi de la requête PROPFIND...")
-                
-                start_time = time.time()
-                resp = self.session.request(
-                    'PROPFIND', 
-                    url, 
-                    headers=headers, 
-                    verify=False,
-                    timeout=self.timeout
-                )
-                elapsed = time.time() - start_time
-                print(f"[NextcloudAPI] Réponse reçue en {elapsed:.2f}s (Status: {resp.status_code})")
-                
-                if resp.status_code != 207:
-                    print(f"[NextcloudAPI] Réponse inattendue: {resp.text[:200]}...")
-                    if attempt < max_retries:
-                        print(f"[NextcloudAPI] Retry dans {retry_delay}s...")
-                        time.sleep(retry_delay)
-                        retry_delay *= 2  # Backoff exponentiel
-                        continue
-                    resp.raise_for_status()
-                
-                print(f"[NextcloudAPI] Parsing XML response...")
-                tree = ET.fromstring(resp.content)
-                ns = {'d': 'DAV:'}
-                current = path.rstrip('/')
-                folders, files = [], []
-                
-                print(f"[NextcloudAPI] Traitement des éléments XML...")
-                for resp_elem in tree.findall('d:response', ns):
-                    href = resp_elem.find('d:href', ns).text
-                    if href.endswith(current):
-                        continue
-                    prop = resp_elem.find('d:propstat/d:prop', ns)
-                    is_collection = prop.find('d:resourcetype/d:collection', ns) is not None
-                    name = unquote(os.path.basename(href.rstrip('/')))
-                    if is_collection:
-                        folders.append(name)
-                    else:
-                        files.append(name)
-                
-                print(f"[NextcloudAPI] Résultat: {len(folders)} dossiers, {len(files)} fichiers")
-                return folders, files
-                
-            except requests.exceptions.Timeout as e:
-                print(f"[NextcloudAPI TIMEOUT] Tentative {attempt + 1} échouée: {str(e)}")
-                if attempt < max_retries:
-                    print(f"[NextcloudAPI] Retry dans {retry_delay}s...")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
+        try:
+            url = self.webdav + path
+            print(f"[NextcloudAPI] URL construite: {url}")
+            print(f"[NextcloudAPI] Auth user: {self.auth[0]}")
+            
+            headers = {**self.default_headers, 'Depth': '1'}
+            print(f"[NextcloudAPI] Envoi de la requête PROPFIND (sans timeout)...")
+            
+            start_time = time.time()
+            resp = self.session.request(
+                'PROPFIND', 
+                url, 
+                headers=headers, 
+                verify=False
+                # Pas de timeout - attendre indéfiniment
+            )
+            elapsed = time.time() - start_time
+            print(f"[NextcloudAPI] Réponse reçue en {elapsed:.2f}s (Status: {resp.status_code})")
+            
+            if resp.status_code != 207:
+                print(f"[NextcloudAPI] Réponse inattendue: {resp.text[:200]}...")
+                resp.raise_for_status()
+            
+            print(f"[NextcloudAPI] Parsing XML response...")
+            tree = ET.fromstring(resp.content)
+            ns = {'d': 'DAV:'}
+            current = path.rstrip('/')
+            folders, files = [], []
+            
+            print(f"[NextcloudAPI] Traitement des éléments XML...")
+            for resp_elem in tree.findall('d:response', ns):
+                href = resp_elem.find('d:href', ns).text
+                if href.endswith(current):
                     continue
+                prop = resp_elem.find('d:propstat/d:prop', ns)
+                is_collection = prop.find('d:resourcetype/d:collection', ns) is not None
+                name = unquote(os.path.basename(href.rstrip('/')))
+                if is_collection:
+                    folders.append(name)
                 else:
-                    print(f"[NextcloudAPI ERROR] Timeout définitif après {max_retries + 1} tentatives")
-                    raise Exception(f"Timeout Nextcloud: impossible d'accéder à {path} après {max_retries + 1} tentatives")
-                    
-            except Exception as e:
-                print(f"[NextcloudAPI ERROR] Erreur dans list_nc_dir (tentative {attempt + 1}): {str(e)}")
-                if attempt < max_retries and "Connection" in str(e):
-                    print(f"[NextcloudAPI] Retry dans {retry_delay}s...")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                else:
-                    import traceback
-                    print(f"[NextcloudAPI ERROR] Traceback: {traceback.format_exc()}")
-                    raise
+                    files.append(name)
+            
+            print(f"[NextcloudAPI] Résultat: {len(folders)} dossiers, {len(files)} fichiers")
+            return folders, files
+            
+        except Exception as e:
+            print(f"[NextcloudAPI ERROR] Erreur dans list_nc_dir: {str(e)}")
+            import traceback
+            print(f"[NextcloudAPI ERROR] Traceback: {traceback.format_exc()}")
+            raise
 
     def upload_file_nextcloud(self, local_path, remote_dir):
         filename = os.path.basename(local_path)
