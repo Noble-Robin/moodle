@@ -1109,6 +1109,60 @@ class MoodleAPI:
             print(f"[ERROR] Erreur lors de l'enrôlement: {e}")
             raise
 
+    def get_user_by_username(self, username):
+        """
+        Récupère un utilisateur Moodle par son nom d'utilisateur (username)
+        Essaie plusieurs méthodes: par email, par idnumber, par username direct
+        
+        Args:
+            username: Nom d'utilisateur à rechercher
+            
+        Returns:
+            Dictionnaire avec les infos de l'utilisateur ou None si non trouvé
+        """
+        try:
+            # 1. Recherche par email (méthode principale)
+            email = f"{username}@caplogy.com"
+            try:
+                params = {'criteria[0][key]': 'email', 'criteria[0][value]': email}
+                result = self._request('core_user_get_users', params)
+                users = result.get('users', []) if isinstance(result, dict) else []
+                if users:
+                    print(f"[DEBUG] Utilisateur trouvé par email: {email} -> ID {users[0]['id']}")
+                    return users[0]
+            except Exception as e:
+                print(f"[DEBUG] Erreur lors de la recherche par email {email}: {e}")
+            
+            # 2. Recherche par idnumber
+            try:
+                params = {'criteria[0][key]': 'idnumber', 'criteria[0][value]': username}
+                result = self._request('core_user_get_users', params)
+                users = result.get('users', []) if isinstance(result, dict) else []
+                if users:
+                    print(f"[DEBUG] Utilisateur trouvé par idnumber: {username} -> ID {users[0]['id']}")
+                    return users[0]
+            except Exception as e:
+                print(f"[DEBUG] Erreur lors de la recherche par idnumber {username}: {e}")
+            
+            # 3. Si username contient déjà @, l'essayer directement comme email
+            if '@' in username:
+                try:
+                    params = {'criteria[0][key]': 'email', 'criteria[0][value]': username}
+                    result = self._request('core_user_get_users', params)
+                    users = result.get('users', []) if isinstance(result, dict) else []
+                    if users:
+                        print(f"[DEBUG] Utilisateur trouvé par email direct: {username} -> ID {users[0]['id']}")
+                        return users[0]
+                except Exception as e:
+                    print(f"[DEBUG] Erreur lors de la recherche par email direct {username}: {e}")
+            
+            print(f"[DEBUG] Utilisateur non trouvé: {username}")
+            return None
+            
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de la recherche de l'utilisateur {username}: {e}")
+            return None
+
     def assign_users_to_course_with_role(self, course_id, usernames, role_id=3):
         """
         Affecte un ou plusieurs utilisateurs (usernames LDAP) au cours avec un rôle spécifique
