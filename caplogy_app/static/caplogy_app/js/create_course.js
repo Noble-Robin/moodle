@@ -248,6 +248,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Nettoyer le chemin avant l'encodage
         const cleanedPath = path.trim().replace(/\\/g, '/');
 
+        // Ajouter un journal pour vérifier le chemin nettoyé et encodé
+        console.log('DEBUG: Chemin nettoyé:', cleanedPath);
+        console.log('DEBUG: Chemin encodé:', encodeURIComponent(cleanedPath));
+
         // Faire l'appel AJAX pour récupérer les fichiers Nextcloud
         fetch(`/nc_dir/?path=${encodeURIComponent(cleanedPath)}`, {
             signal: controller.signal,
