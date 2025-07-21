@@ -106,6 +106,54 @@
             </div>
         </div>
 
+        <!-- Section Assistants/Coordinateurs (Rôle ID 2) -->
+        <div class="form-section">
+            <div class="section-header">
+                <h2>Assistant(s)/Coordinateur(s) du cours</h2>
+                <p class="section-description">Gérez les assistants/coordinateurs assignés au cours (Rôle ID 2)</p>
+            </div>
+            
+            {% if is_edit %}
+                <div id="current-assistants" class="current-teachers">
+                    <h4>Assistants/Coordinateurs actuels :</h4>
+                    <div id="current-assistants-list" class="teachers-list">
+                        <em>Chargement...</em>
+                    </div>
+                </div>
+            {% endif %}
+            
+            <div class="form-field">
+                <label for="assistant-dropdown">Ajouter des assistants/coordinateurs</label>
+                <div class="dropdown-container">
+                    <div class="dropdown-header" id="assistant-dropdown" onclick="toggleAssistantDropdown()">
+                        <span id="assistant-dropdown-text">Sélectionner des assistants/coordinateurs...</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div class="dropdown-content" id="assistant-dropdown-content">
+                        <div class="dropdown-search">
+                            <input type="text" id="assistant-search" placeholder="Rechercher un assistant/coordinateur..." onkeyup="filterAssistants()">
+                        </div>
+                        <div class="dropdown-options" id="assistant-options">
+                            {% for prof in profs %}
+                                <div class="dropdown-option" data-username="{{ prof.username }}" onclick="toggleAssistantSelection('{{ prof.username }}', '{{ prof.name }}')">
+                                    <input type="checkbox" id="assistant-{{ prof.username }}" value="{{ prof.username }}">
+                                    <label for="assistant-{{ prof.username }}">{{ prof.name }} ({{ prof.username }})</label>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="selected-assistants" class="selected-profs">
+                    <h5>Assistants/Coordinateurs sélectionnés :</h5>
+                    <div id="selected-assistants-list"></div>
+                </div>
+                
+                <!-- Champ caché pour le formulaire -->
+                <input type="hidden" id="assistants-hidden" name="assistants" value="">
+            </div>
+        </div>
+
         <!-- Section Sections -->
         <div class="form-section">
             <div class="section-header">
@@ -407,23 +455,230 @@ window.removeCurrentTeacher = function(teacherId, username) {
     });
 };
 
+// ======= GESTION DES ASSISTANTS/COORDINATEURS (RÔLE ID 2) =======
+
+// Gestion du menu déroulant des assistants
+let selectedAssistants = new Set();
+
+// Fonction pour basculer l'affichage du menu déroulant
+function toggleAssistantDropdown() {
+    const dropdown = document.getElementById('assistant-dropdown');
+    const content = document.getElementById('assistant-dropdown-content');
+    
+    dropdown.classList.toggle('active');
+    content.classList.toggle('show');
+    
+    // Fermer le menu si on clique ailleurs
+    if (content.classList.contains('show')) {
+        document.addEventListener('click', closeAssistantDropdownOnClickOutside);
+    } else {
+        document.removeEventListener('click', closeAssistantDropdownOnClickOutside);
+    }
+}
+
+// Fonction pour fermer le menu déroulant si on clique à l'extérieur
+function closeAssistantDropdownOnClickOutside(event) {
+    const container = event.target.closest('.dropdown-container');
+    if (!container || !container.querySelector('#assistant-dropdown-content')) {
+        const dropdown = document.getElementById('assistant-dropdown');
+        const content = document.getElementById('assistant-dropdown-content');
+        if (dropdown && content) {
+            dropdown.classList.remove('active');
+            content.classList.remove('show');
+            document.removeEventListener('click', closeAssistantDropdownOnClickOutside);
+        }
+    }
+}
+
+// Fonction pour filtrer les assistants
+function filterAssistants() {
+    const filter = document.getElementById('assistant-search').value.toLowerCase();
+    const options = document.querySelectorAll('#assistant-options .dropdown-option');
+    
+    options.forEach(option => {
+        const text = option.textContent.toLowerCase();
+        option.style.display = text.includes(filter) ? 'flex' : 'none';
+    });
+}
+
+// Fonction pour sélectionner/désélectionner un assistant
+function toggleAssistantSelection(username, profName) {
+    const checkbox = document.getElementById(`assistant-${username}`);
+    const option = document.querySelector(`#assistant-options [data-username="${username}"]`);
+    
+    // Basculer l'état de la checkbox
+    checkbox.checked = !checkbox.checked;
+    
+    if (checkbox.checked) {
+        selectedAssistants.add(username);
+        option.classList.add('selected');
+        addSelectedAssistantTag(username, profName);
+    } else {
+        selectedAssistants.delete(username);
+        option.classList.remove('selected');
+        removeSelectedAssistantTag(username);
+    }
+    
+    updateAssistantDropdownText();
+    updateAssistantHiddenField();
+}
+
+// Fonction pour ajouter un tag d'assistant sélectionné
+function addSelectedAssistantTag(username, profName) {
+    const selectedAssistantsList = document.getElementById('selected-assistants-list');
+    
+    const tag = document.createElement('span');
+    tag.className = 'selected-prof-tag';
+    tag.dataset.username = username;
+    tag.innerHTML = `
+        ${profName}
+        <button type="button" class="selected-prof-remove" onclick="removeSelectedAssistant('${username}')">×</button>
+    `;
+    selectedAssistantsList.appendChild(tag);
+}
+
+// Fonction pour supprimer un tag d'assistant sélectionné
+function removeSelectedAssistantTag(username) {
+    const tag = document.querySelector(`#selected-assistants-list [data-username="${username}"]`);
+    if (tag) {
+        tag.remove();
+    }
+}
+
+// Fonction pour mettre à jour le texte du menu déroulant
+function updateAssistantDropdownText() {
+    const dropdownText = document.getElementById('assistant-dropdown-text');
+    const count = selectedAssistants.size;
+    
+    if (count === 0) {
+        dropdownText.textContent = 'Sélectionner des assistants/coordinateurs...';
+    } else if (count === 1) {
+        dropdownText.textContent = '1 assistant/coordinateur sélectionné';
+    } else {
+        dropdownText.textContent = `${count} assistants/coordinateurs sélectionnés`;
+    }
+}
+
+// Fonction pour mettre à jour le champ caché
+function updateAssistantHiddenField() {
+    const assistantsHidden = document.getElementById('assistants-hidden');
+    assistantsHidden.value = Array.from(selectedAssistants).join(',');
+}
+
+// Fonction globale pour supprimer un assistant sélectionné
+window.removeSelectedAssistant = function(username) {
+    selectedAssistants.delete(username);
+    removeSelectedAssistantTag(username);
+    
+    // Décocher la checkbox correspondante
+    const checkbox = document.getElementById(`assistant-${username}`);
+    const option = document.querySelector(`#assistant-options [data-username="${username}"]`);
+    if (checkbox) checkbox.checked = false;
+    if (option) option.classList.remove('selected');
+    
+    updateAssistantDropdownText();
+    updateAssistantHiddenField();
+};
+
+function initAssistantSelector() {
+    // Pas besoin d'initialisation spéciale, tout est géré par les fonctions onclick
+    updateAssistantDropdownText();
+}
+
+// Gestion des assistants actuels en mode édition
+function initCurrentAssistants() {
+    if (!window.isEdit) return;
+    
+    const courseData = document.getElementById('course-data');
+    if (!courseData) return;
+    
+    const courseId = courseData.dataset.id;
+    const currentAssistantsList = document.getElementById('current-assistants-list');
+    
+    // Récupérer les assistants actuels avec role_id=2
+    fetch(`/api/course/${courseId}/teachers/?role_id=2`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.teachers && data.teachers.length > 0) {
+                currentAssistantsList.innerHTML = '';
+                data.teachers.forEach(teacher => {
+                    const teacherElement = document.createElement('div');
+                    teacherElement.className = 'current-teacher';
+                    teacherElement.innerHTML = `
+                        <span class="teacher-name">${teacher.fullname} (${teacher.username})</span>
+                        <button type="button" class="remove-teacher-btn" onclick="removeCurrentAssistant(${teacher.id}, '${teacher.fullname}')">
+                            Retirer
+                        </button>
+                    `;
+                    currentAssistantsList.appendChild(teacherElement);
+                });
+            } else {
+                currentAssistantsList.innerHTML = '<em>Aucun assistant/coordinateur assigné</em>';
+            }
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des assistants:', error);
+            currentAssistantsList.innerHTML = '<em>Erreur lors du chargement</em>';
+        });
+}
+
+// Fonction pour retirer un assistant actuel
+window.removeCurrentAssistant = function(teacherId, teacherName) {
+    if (!confirm(`Êtes-vous sûr de vouloir retirer ${teacherName} des assistants/coordinateurs de ce cours ?`)) {
+        return;
+    }
+    
+    const courseData = document.getElementById('course-data');
+    const courseId = courseData.dataset.id;
+    
+    fetch(`/api/course/${courseId}/remove_teacher/`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            teacher_id: teacherId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Recharger la liste des assistants actuels
+            initCurrentAssistants();
+        } else {
+            alert('Erreur: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        alert('Erreur lors de la suppression de l\'assistant/coordinateur');
+    });
+};
+
 // Modifier le gestionnaire de soumission du formulaire
 document.addEventListener('DOMContentLoaded', function() {
     initTheme();
     initProfSelector();
     initCurrentTeachers();
+    initAssistantSelector();
+    initCurrentAssistants();
     
     // Rendre les fonctions globales accessibles
     window.toggleProfDropdown = toggleProfDropdown;
     window.filterProfs = filterProfs;
     window.toggleProfSelection = toggleProfSelection;
+    window.toggleAssistantDropdown = toggleAssistantDropdown;
+    window.filterAssistants = filterAssistants;
+    window.toggleAssistantSelection = toggleAssistantSelection;
     
-    // Modifier la soumission du formulaire pour traiter les professeurs
+    // Modifier la soumission du formulaire pour traiter les professeurs et assistants
     const form = document.getElementById('course-form');
     if (form) {
         form.addEventListener('submit', function(e) {
-            // Mettre à jour le champ caché avant soumission
+            // Mettre à jour les champs cachés avant soumission
             updateHiddenField();
+            updateAssistantHiddenField();
         });
     }
 });

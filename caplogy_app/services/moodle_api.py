@@ -5,10 +5,15 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class MoodleAPI:
-    def get_course_teachers(self, course_id):
+    def get_course_teachers(self, course_id, role_id=3):
         """
-        Récupère la liste des enseignants (roleid=3) inscrits à un cours Moodle.
+        Récupère la liste des utilisateurs avec un rôle spécifique inscrits à un cours Moodle.
         Nécessite que le service web core_enrol_get_enrolled_users soit activé côté Moodle.
+        
+        Args:
+            course_id: ID du cours Moodle
+            role_id: ID du rôle (3=enseignant par défaut, 2=coordinateur, 4=assistant, etc.)
+        
         Retourne une liste de dicts utilisateurs (id, username, firstname, lastname, email...)
         """
         try:
@@ -21,12 +26,12 @@ class MoodleAPI:
                 # Vérifier les rôles attribués à l'utilisateur dans ce cours
                 roles = user.get('roles', [])
                 for role in roles:
-                    if role.get('roleid') == 3:  # 3 = enseignant
+                    if role.get('roleid') == role_id:
                         teachers.append(user)
                         break
             return teachers
         except Exception as e:
-            print(f"Erreur lors de la récupération des enseignants du cours {course_id}: {e}")
+            print(f"Erreur lors de la récupération des utilisateurs avec le rôle {role_id} du cours {course_id}: {e}")
             return []
     
     def remove_teachers_from_course(self, course_id, usernames_or_ids):
@@ -418,6 +423,31 @@ class MoodleAPI:
             return self._request('core_course_delete_courses', params)
         except Exception as e:
             raise Exception(f"Impossible de supprimer le cours: {str(e)}")
+
+    def set_course_image(self, course_id, image_url):
+        """Définit l'image d'un cours Moodle via le plugin."""
+        try:
+            if not course_id or not image_url:
+                raise ValueError("Les paramètres course_id et image_url sont obligatoires")
+            
+            params = {
+                'courseid': course_id,
+                'imageurl': image_url,
+            }
+            return self._request('local_ajoutdescription_set_course_image', params)
+        except Exception as e:
+            print(f"Erreur lors de la définition de l'image du cours via plugin: {str(e)}")
+            # Fallback vers l'ancienne méthode
+            try:
+                params = {
+                    'courses[0][id]': course_id,
+                    'courses[0][overviewfiles][0][filename]': 'course_image.jpg',
+                    'courses[0][overviewfiles][0][fileurl]': image_url,
+                }
+                return self._request('core_course_update_courses', params)
+            except Exception as fallback_error:
+                print(f"Erreur lors de la définition de l'image du cours (fallback): {str(fallback_error)}")
+                return None
 
     def create_sections(self, course_id, section_names):
         params = {'courseid': course_id}
@@ -1078,6 +1108,52 @@ class MoodleAPI:
         except Exception as e:
             print(f"[ERROR] Erreur lors de l'enrôlement: {e}")
             raise
+
+    def assign_users_to_course_with_role(self, course_id, usernames, role_id=3):
+        """
+        Affecte un ou plusieurs utilisateurs (usernames LDAP) au cours avec un rôle spécifique
+        
+        Args:
+            course_id: ID du cours Moodle
+            usernames: Liste des noms d'utilisateurs LDAP
+            role_id: ID du rôle Moodle (2=coordinateur, 3=enseignant, 4=assistant, 5=étudiant, etc.)
+        
+        Returns:
+            Résultat de l'enrôlement ou None en cas d'échec
+        """
+        if not usernames:
+            return None
+        
+        print(f"[DEBUG] Affectation des utilisateurs au cours {course_id} avec le rôle {role_id}: {usernames}")
+        
+        # Récupérer les IDs des utilisateurs Moodle
+        userids = []
+        failed_usernames = []
+        
+        for username in usernames:
+            try:
+                print(f"[DEBUG] Recherche de l'utilisateur: {username}")
+                user_info = self.get_user_by_username(username)
+                if user_info and 'id' in user_info:
+                    userids.append(user_info['id'])
+                    print(f"[DEBUG] Utilisateur trouvé: {username} -> ID {user_info['id']}")
+                else:
+                    failed_usernames.append(username)
+                    print(f"[WARNING] Utilisateur non trouvé: {username}")
+            except Exception as e:
+                failed_usernames.append(username)
+                print(f"[ERROR] Erreur lors de la recherche de l'utilisateur {username}: {e}")
+        
+        if failed_usernames:
+            print(f"[WARNING] Utilisateurs non trouvés: {failed_usernames}")
+        
+        if not userids:
+            print("[WARNING] Aucun utilisateur valide trouvé pour l'affectation")
+            return None
+            
+        # Enrôler les users avec le rôle spécifié
+        print(f"[DEBUG] Enrôlement de {len(userids)} utilisateurs dans le cours {course_id} avec le rôle {role_id}")
+        return self._enrol_users_to_course(course_id, userids, role_id=role_id)
     
     def debug_find_users_in_moodle(self, usernames):
         """

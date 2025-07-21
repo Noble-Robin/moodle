@@ -642,6 +642,12 @@ def create_course(request, course_id=None):
         if profs_data:
             selected_profs = [p.strip() for p in profs_data.split(',') if p.strip()]
         
+        # Traiter les assistants/coordinateurs sélectionnés (rôle ID 2)
+        assistants_data = request.POST.get('assistants', '')
+        selected_assistants = []
+        if assistants_data:
+            selected_assistants = [a.strip() for a in assistants_data.split(',') if a.strip()]
+        
         if not cat_id:
             messages.error(request, "Veuillez sélectionner une catégorie")
             top_cats = api.get_categories(0)
@@ -669,7 +675,21 @@ def create_course(request, course_id=None):
                     except Exception as prof_error:
                         print(f"[ERROR] Erreur lors de l'ajout des professeurs: {prof_error}")
                         messages.warning(request, f"Cours modifié mais erreur lors de l'ajout des professeurs: {prof_error}")
-                # Note: Les professeurs existants ne sont plus supprimés automatiquement
+                
+                # Affecter les assistants/coordinateurs sélectionnés au cours (rôle ID 2)
+                if selected_assistants:
+                    print(f"[DEBUG] Ajout des assistants/coordinateurs au cours {course_id}: {selected_assistants}")
+                    try:
+                        result = api.assign_users_to_course_with_role(course_id, selected_assistants, role_id=2)
+                        if result is not None:
+                            print(f"[DEBUG] Assistants/coordinateurs ajoutés avec succès: {selected_assistants}")
+                        else:
+                            print(f"[WARNING] Aucun assistant/coordinateur n'a pu être affecté")
+                    except Exception as assistant_error:
+                        print(f"[ERROR] Erreur lors de l'ajout des assistants/coordinateurs: {assistant_error}")
+                        messages.warning(request, f"Cours modifié mais erreur lors de l'ajout des assistants/coordinateurs: {assistant_error}")
+                
+                # Note: Les professeurs et assistants existants ne sont plus supprimés automatiquement
                 # Ils doivent être supprimés individuellement via l'interface
                 
                 # Récupérer et traiter les sections pour l'édition
@@ -747,6 +767,19 @@ def create_course(request, course_id=None):
                         except Exception as prof_error:
                             print(f"[ERROR] Erreur lors de l'affectation des professeurs: {prof_error}")
                             messages.warning(request, f"Cours créé mais erreur lors de l'affectation des professeurs: {prof_error}")
+                    
+                    # Affecter les assistants/coordinateurs sélectionnés au cours (rôle ID 2)
+                    if selected_assistants:
+                        print(f"[DEBUG] Affectation des assistants/coordinateurs au nouveau cours {course_id}: {selected_assistants}")
+                        try:
+                            result = api.assign_users_to_course_with_role(course_id, selected_assistants, role_id=2)
+                            if result is not None:
+                                print(f"[DEBUG] Assistants/coordinateurs affectés avec succès: {selected_assistants}")
+                            else:
+                                print(f"[WARNING] Aucun assistant/coordinateur n'a pu être affecté")
+                        except Exception as assistant_error:
+                            print(f"[ERROR] Erreur lors de l'affectation des assistants/coordinateurs: {assistant_error}")
+                            messages.warning(request, f"Cours créé mais erreur lors de l'affectation des assistants/coordinateurs: {assistant_error}")
                     
                     sections = [v for k,v in request.POST.items() if k.startswith('section_')]
                     
@@ -1105,6 +1138,7 @@ def build_category_hierarchy_for_course(api, target_category_id):
 def get_course_teachers_api(request, course_id):
     """
     API pour récupérer les professeurs d'un cours
+    Supporte le paramètre ?role_id=X pour filtrer par rôle
     """
     try:
         api = MoodleAPI(
@@ -1112,7 +1146,10 @@ def get_course_teachers_api(request, course_id):
             token=os.getenv('MOODLE_TOKEN')
         )
         
-        teachers = api.get_course_teachers(course_id)
+        # Récupérer le role_id depuis les paramètres GET (par défaut 3 = enseignant)
+        role_id = int(request.GET.get('role_id', 3))
+        
+        teachers = api.get_course_teachers(course_id, role_id=role_id)
         
         # Formatter les données pour le frontend
         formatted_teachers = []
@@ -1128,7 +1165,8 @@ def get_course_teachers_api(request, course_id):
         
         return JsonResponse({
             'teachers': formatted_teachers,
-            'count': len(formatted_teachers)
+            'count': len(formatted_teachers),
+            'role_id': role_id
         })
         
     except Exception as e:
