@@ -7,6 +7,10 @@ import os
 import requests
 import time
 from urllib.parse import urlparse
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement depuis .env
+load_dotenv()
 
 class NextcloudDiagnostic:
     def __init__(self):

@@ -28,7 +28,7 @@ class NextcloudAPI:
 
     def list_nc_dir(self, path):
         # S'assurer que le chemin commence par /Shared/Biblio_Cours_Caplogy
-        biblio_path = '/Shared/Biblio_Cours_Caplogy'
+        biblio_path = '/Shared'
         if not path.startswith(biblio_path):
             if path.startswith('/'):
                 path = biblio_path + path
@@ -38,8 +38,8 @@ class NextcloudAPI:
         # Retry logic pour gérer les timeouts
         max_retries = 2
         retry_delay = 2
-        
-        for attempt in range(max_retries + 1):
+
+        while True:
             try:
                 url = self.webdav + path
                 print(f"[NextcloudAPI] URL construite: {url} (tentative {attempt + 1})")
