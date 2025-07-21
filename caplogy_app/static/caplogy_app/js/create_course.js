@@ -428,18 +428,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Ajouter les dossiers
         if (data.folders) {
             data.folders.forEach(folderName => {
-                // Filtrer le dossier racine Biblio_Cours_Caplogy quand on est à la racine
-                if ((path === '/' || path === '') && folderName === 'Biblio_Cours_Caplogy') {
-                    // Ne pas afficher ce dossier comme bouton cliquable
-                    return;
-                }
-                
+                // Supprimer la condition qui filtre 'Biblio_Cours_Caplogy'
                 // Éviter d'afficher le dossier courant comme un sous-dossier
                 const currentFolderName = path.split('/').filter(p => p).pop();
                 if (folderName === currentFolderName) {
                     return;
                 }
-                
                 const listItem = document.createElement('li');
                 listItem.innerHTML = `📁 ${folderName}`;
                 listItem.dataset.type = 'folder';
@@ -450,7 +444,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 listItem.style.borderRadius = '0.375rem';
                 listItem.style.transition = 'background-color 0.2s';
                 listItem.style.color = colors.textPrimary;
-                
                 // Effet hover
                 listItem.addEventListener('mouseenter', () => {
                     listItem.style.backgroundColor = colors.hoverBg;
