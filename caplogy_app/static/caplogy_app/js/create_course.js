@@ -248,12 +248,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Nettoyer le chemin avant l'encodage
         const cleanedPath = path.trim().replace(/\\/g, '/');
 
-        // Ajouter un journal pour vérifier le chemin nettoyé et encodé
-        console.log('DEBUG: Chemin nettoyé:', cleanedPath);
-        console.log('DEBUG: Chemin encodé:', encodeURIComponent(cleanedPath));
+        // Corriger l'encodage des espaces et des caractères spéciaux
+        const fullyEncodedPath = cleanedPath.split('/').map(encodeURIComponent).join('/');
+
+        // Ajouter un journal pour vérifier le chemin entièrement encodé
+        console.log('DEBUG: Chemin entièrement encodé:', fullyEncodedPath);
 
         // Faire l'appel AJAX pour récupérer les fichiers Nextcloud
-        fetch(`/nc_dir/?path=${encodeURIComponent(cleanedPath)}`, {
+        fetch(`/nc_dir/?path=${fullyEncodedPath}`, {
             signal: controller.signal,
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
