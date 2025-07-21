@@ -109,7 +109,7 @@ class NextcloudAPI:
         """Génère une URL de partage Nextcloud pour un fichier donné"""
         try:
             # S'assurer que le chemin commence par /Shared/Biblio_Cours_Caplogy
-            biblio_path = '/Shared/Biblio_Cours_Caplogy'
+            biblio_path = '/'
             if not file_path.startswith(biblio_path):
                 if file_path.startswith('/'):
                     file_path = biblio_path + file_path
