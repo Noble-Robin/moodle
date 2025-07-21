@@ -23,8 +23,8 @@ class NextcloudAPI:
         }
 
     def list_nc_dir(self, path):
-        # S'assurer que le chemin commence par /Shared/Biblio_Cours_Caplogy
-        biblio_path = '/Shared'
+        # S'assurer que le chemin commence par /
+        biblio_path = '/'
         if not path.startswith(biblio_path):
             if path.startswith('/'):
                 path = biblio_path + path
