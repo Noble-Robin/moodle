@@ -323,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Racine cliquable
             const rootLink = document.createElement('span');
-            rootLink.textContent = 'Biblio_Cours_Caplogy';
+            rootLink.textContent = 'Root'; // Remplacer 'Biblio_Cours_Caplogy' par 'Root'
             rootLink.style.cursor = 'pointer';
             rootLink.style.color = colors.textPrimary + ' !important';
             rootLink.style.fontWeight = '600';
