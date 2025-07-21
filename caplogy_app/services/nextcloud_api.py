@@ -40,16 +40,41 @@ class NextcloudAPI:
             print(f"[NextcloudAPI] URL construite: {url}")
             print(f"[NextcloudAPI] Auth user: {self.auth[0]}")
             
+            # Test de connectivité de base d'abord
+            print(f"[NextcloudAPI] Test de connectivité de base...")
+            try:
+                import socket
+                from urllib.parse import urlparse
+                parsed_url = urlparse(url)
+                host = parsed_url.hostname
+                port = parsed_url.port or (443 if parsed_url.scheme == 'https' else 80)
+                
+                print(f"[NextcloudAPI] Test connexion vers {host}:{port}")
+                sock = socket.create_connection((host, port), timeout=10)
+                sock.close()
+                print(f"[NextcloudAPI] ✅ Connexion TCP réussie vers {host}:{port}")
+            except Exception as conn_err:
+                print(f"[NextcloudAPI] ❌ Échec connexion TCP: {conn_err}")
+                raise Exception(f"Impossible de se connecter au serveur {host}:{port}")
+            
             headers = {**self.default_headers, 'Depth': '1'}
+            print(f"[NextcloudAPI] Headers préparés: {headers}")
             print(f"[NextcloudAPI] Envoi de la requête PROPFIND (sans timeout)...")
+            print(f"[NextcloudAPI] Méthode: PROPFIND")
+            print(f"[NextcloudAPI] URL: {url}")
+            print(f"[NextcloudAPI] Auth: {self.auth[0]}:***")
+            print(f"[NextcloudAPI] Verify SSL: False")
             
             start_time = time.time()
-            resp = self.session.request(
+            
+            # Utiliser requests direct au lieu de session pour débugger
+            resp = requests.request(
                 'PROPFIND', 
                 url, 
                 headers=headers, 
-                verify=False
-                # Pas de timeout - attendre indéfiniment
+                auth=self.auth,
+                verify=False,
+                timeout=60  # Timeout de 60s pour éviter de bloquer indéfiniment
             )
             elapsed = time.time() - start_time
             print(f"[NextcloudAPI] Réponse reçue en {elapsed:.2f}s (Status: {resp.status_code})")
