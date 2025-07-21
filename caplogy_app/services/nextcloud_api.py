@@ -23,14 +23,7 @@ class NextcloudAPI:
         }
 
     def list_nc_dir(self, path):
-        # S'assurer que le chemin commence par /
-        biblio_path = '/'
-        if not path.startswith(biblio_path):
-            if path.startswith('/'):
-                path = biblio_path + path
-            else:
-                path = biblio_path + '/' + path
-
+        # Supprimer la logique qui force le chemin à commencer par '/Shared/Biblio_Cours_Caplogy'
         try:
             url = self.webdav + path
             print(f"[NextcloudAPI] URL construite: {url}")
@@ -108,14 +101,7 @@ class NextcloudAPI:
     def get_share_url(self, file_path):
         """Génère une URL de partage Nextcloud pour un fichier donné"""
         try:
-            # S'assurer que le chemin commence par /Shared/Biblio_Cours_Caplogy
-            biblio_path = '/'
-            if not file_path.startswith(biblio_path):
-                if file_path.startswith('/'):
-                    file_path = biblio_path + file_path
-                else:
-                    file_path = biblio_path + '/' + file_path
-
+            # Supprimer la logique qui force le chemin à commencer par '/Shared/Biblio_Cours_Caplogy'
             return self.share_file_nextcloud(file_path)
         except Exception as e:
             print(f"Erreur lors de la génération de l'URL de partage pour {file_path}: {e}")
