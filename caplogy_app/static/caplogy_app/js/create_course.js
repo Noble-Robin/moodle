@@ -150,11 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addResource = function(btn, sectionId) {
         console.log('🔍 DEBUG: addResource appelée avec sectionId:', sectionId);
         console.log('🔍 DEBUG: btn:', btn);
-        console.log('🔍 DEBUG: modal element:', modal);
-        
+
         currentSectionId = sectionId;
         currentResourceBtn = btn;
-        openFileModal('/');
+        openFileModal('/Cours Test');
     };
     
     console.log('🚀 DEBUG: Fonction addResource définie sur window:', typeof window.addResource);
